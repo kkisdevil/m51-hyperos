@@ -1,0 +1,43 @@
+From: YuZora kernel porter <kartik@aoisora.codes>
+Subject: [PATCH] msm/npu: fix npu_debugfs.o dropped by := overwrite in Makefile
+
+drivers/media/platform/msm/npu/npu_dev.c:2231: undefined reference
+to `npu_debugfs_init' (in npu_probe) and npu_dev.c:2290: undefined
+reference to `npu_debugfs_deinit' (in npu_remove) at the vmlinux
+link, kernel build run #4, 2026-11-24, Gate 3.
+
+Root cause: the NPU Makefile builds the debugfs file and the
+driver with `:=` on the same obj-y variable:
+
+    obj-$(CONFIG_DEBUG_FS)     := npu_debugfs.o
+    obj-$(CONFIG_MSM_NPU)      := msm_npu.o
+
+With CONFIG_DEBUG_FS=y and CONFIG_MSM_NPU=y (both set in
+kernel/m51_defconfig) both lines expand to obj-y, and the second
+`:=` assignment overwrites the first — npu_debugfs.o is never
+compiled. The run #4 log proves it: all five msm_npu-objs members
+were compiled (log lines 3230-3245) but there is no `CC ...
+npu_debugfs.o` line anywhere, while npu_dev.c calls the two
+functions under `#ifdef CONFIG_DEBUG_FS` and npu_common.h declares
+them the same way, so the references exist with no defining
+object. The same `:=` form is also broken the other way round
+(MSM_NPU=m leaves a module referencing a non-exported symbol).
+
+Fix: `:=` -> `+=` on both lines, so both objects land in obj-y.
+No behaviour change beyond building the file the driver already
+calls. The parent Makefile already enters npu/ with
+`obj-$(CONFIG_MSM_NPU) += npu/`, so no change is needed there.
+
+Applies to kkisdevil/android_kernel_samsung_sm7150 @ 4d83f24b
+(crDroid 4.14.357-openela). Applied porter-side by the
+build-kernel workflow (patches/kernel/*.patch) so the pinned
+kernel ref stays untouched.
+---
+--- a/drivers/media/platform/msm/npu/Makefile
++++ b/drivers/media/platform/msm/npu/Makefile
+@@ -1,3 +1,3 @@
+-obj-$(CONFIG_DEBUG_FS)     := npu_debugfs.o
+-obj-$(CONFIG_MSM_NPU)      := msm_npu.o
++obj-$(CONFIG_DEBUG_FS)     += npu_debugfs.o
++obj-$(CONFIG_MSM_NPU)      += msm_npu.o
+ msm_npu-objs := npu_dbg.o \
