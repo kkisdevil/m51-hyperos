@@ -63,6 +63,26 @@ jobs:
     name: Build kernel (m51)
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    env:
+      # LOCALVERSION must be SET (empty) for every make run. Run #7
+      # failed at Gate 5: `make kernelrelease` printed
+      # `4.14.357-openela+`. The `+` is scripts/setlocalversion's
+      # marker: CONFIG_LOCALVERSION_AUTO is off, so with LOCALVERSION
+      # unset the script appends `+` whenever `scm_version --short`
+      # is non-empty — and the fork has NO tags (git ls-remote
+      # --tags is empty), so --short prints `+` even on a perfectly
+      # clean tree. Committing the porter patches would NOT fix it.
+      # With LOCALVERSION set (even empty) the script skips the `+`
+      # branch entirely. Verified locally against the real
+      # setlocalversion at the pinned commit, dirty and clean, and
+      # that an environment LOCALVERSION reaches the script at every
+      # call site. A job-level env var is used (not LOCALVERSION= on
+      # the make command lines): the kernel invokes setlocalversion
+      # from recipe lines via shell $() substitution, where a
+      # command-line assignment would also reach it — but an env var
+      # reaches every call site uniformly, including parse-time
+      # $(shell) invocations, and covers any future make call.
+      LOCALVERSION: ""
     steps:
       - name: Check out m51-hyperos (this repo — defconfig + docs)
         uses: actions/checkout@v7
