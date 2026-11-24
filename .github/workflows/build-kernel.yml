@@ -103,11 +103,35 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           # bc/bison/flex/libssl-dev/libelf-dev: kernel build deps.
+          sudo apt-get install -y -qq \
+            bc bison flex libssl-dev libelf-dev
           # libtinfo5: proton-clang was built on Ubuntu 18.04
           # (glibc 2.27) and its clang binary links libtinfo.so.5,
-          # which ubuntu-24.04 does not ship by default.
-          sudo apt-get install -y -qq \
-            bc bison flex libssl-dev libelf-dev libtinfo5
+          # which ubuntu-24.04 does not ship. libtinfo5 is NOT in
+          # the noble repos at all — apt answers "Unable to locate
+          # package libtinfo5" (run #1, 2026-11-24, exit 100) — so
+          # fetch the current jammy build from the Ubuntu security
+          # pool. The filename is resolved from the pool listing
+          # instead of hard-coding a version: the 6.3-2ubuntu0.1
+          # file cited in blog posts is already superseded (404),
+          # and a pinned version would 404 again on the next
+          # security revision. Sort the bare version strings, not
+          # the filenames: sort -V on the full filename misorders
+          # them (the _amd64.deb suffix flips 6.3-2ubuntu0.3
+          # below 6.3-2).
+          libtinfo_url="http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/"
+          libtinfo_ver="$(curl -fsSL "$libtinfo_url" \
+            | grep -o 'libtinfo5_[0-9][^"]*_amd64\.deb' \
+            | sed 's/^libtinfo5_//; s/_amd64\.deb$//' \
+            | sort -V | tail -1 || true)"
+          if [ -z "$libtinfo_ver" ]; then
+            echo "::error::libtinfo5 not found in the jammy pool listing"
+            exit 1
+          fi
+          libtinfo_deb="libtinfo5_${libtinfo_ver}_amd64.deb"
+          echo "Installing $libtinfo_deb from the jammy pool"
+          curl -fsSL -o /tmp/libtinfo5_amd64.deb "${libtinfo_url}${libtinfo_deb}"
+          sudo apt-get install -y -qq /tmp/libtinfo5_amd64.deb
           echo "nproc: $(nproc)"
 
       - name: Put proton-clang on PATH
