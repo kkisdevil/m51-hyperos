@@ -98,6 +98,27 @@ Design rules (from the reverse-engineering):
 
 ### Phase 0 — Tree takeover + blob refresh (desk work, no device needed)
 
+**Phase 0 status — audit done 2026-11-24 (see
+[tree-takeover.md](tree-takeover.md) + `trees/manifest.json`):**
+trees pinned at `lineage-22.2` — m51 `55df7b4a`, a71-common
+`48e5e36e`, a71 kernel `81831f0c` (4.14.336), vendor m51
+`de409289`, vendor a71-common `407f21e5`; crDroid kernel `16.0`
+`4d83f24b` (4.14.357-openela, pushed 2026-11-22). Two corrections
+to reverse-engineering.md §1: the code is frozen at **2025-04-29**,
+not 2025-07-15 (that is only the repos' push timestamp), and the
+blob inventory is **913** entries (180 + 733), not 969. One
+blocker found: the crDroid kernel has **no `m51_defconfig`** and
+its `build_kernel.sh` references a non-existent
+`a71_eur_open_defconfig` — the defconfig assembly must be resolved
+before any kernel build. Open checks: VINTF declaration for
+camera/composer/sensors/power/thermal/health/vibrator/wifi/drm/
+light/allocator/mapper (not in the device manifest — verify with
+`check_vintf` on the first build); the `hardware/samsung/nfc`
+dependency (org + pin); the stray U+200E `board-info.txt`; the
+LineageOS a71 cross-check diff. **Forks not yet created; blob
+re-extraction from M515FXXU6DXJ2 not started** (needs the firmware
+download). No build attempted yet.
+
 - Fork the five a71-devs repos (m51 device, a71-common, kernel, m51 vendor,
   a71-common vendor) into the project org; record the fork point
   (`lineage-22.2`, last push 2025-07-15).
