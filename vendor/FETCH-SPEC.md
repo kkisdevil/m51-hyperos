@@ -25,29 +25,44 @@ Primary source: Mystic GSI, SourceForge project `mystic-gsi-updates`.
 | Filesystem | **ext4** (verified by magic bytes, docs/gsi-verification.md §3.1) |
 | Extracted system.img | 6,232,481,792 bytes |
 
-**Drive mirror (alternative fetch source):** attempted 2026-11-25 ~00:00–00:35 IST
-into the user's Google Drive (5 TB account), folder
-`backups/m51-hyperos/` (folder id `1Jichu0sPVFaiI9_YFh0bD4nLss9Nl7Ip`,
-created via the Drive API — Drive itself is reachable and connected).
-**The upload FAILED twice with the identical error** — Google 500
-`internalError`, http2 stream error on the multipart upload endpoint
-(`upload/drive/v3/files?uploadType=multipart`), after ~17 min and
-~10 min respectively. No partial file was left behind (folder
-verified empty after both attempts). The CLI's only upload path is a
-single multipart request, which is not a viable way to move a 3.1 GB
-file; a resumable/chunked upload is the correct mechanism and is not
-exposed by this CLI. **The local file is ready and verified** (MD5
-`3e6337d1…`, re-hashed 2026-11-24); **SourceForge stays the primary
-fetch source** until a resumable upload is implemented. Do NOT claim
-a Drive mirror exists until a file actually lands there — verify by
-listing the folder and checking the MD5.
+**Drive mirror (alternative fetch source):** MIRRORED 2026-11-25 ~02:44 IST —
+`backups/m51-hyperos/gsi/` (folder id `1Lki6WecamHlTwQpXPMkM1WvmhGk7fMNu`,
+under `backups/m51-hyperos/` id `1Jichu0sPVFaiI9_YFh0bD4nLss9Nl7Ip`).
+The first two attempts (2026-11-25 ~00:00–00:35 IST) FAILED with Google 500
+`internalError` on the CLI's single multipart upload of the whole 3.1 GB
+file. The fix, same as the firmware mirror: split into 1 GiB parts and
+upload each part separately with `hatch_gws_cli drive +upload`, verifying
+each part on Drive by size + md5Checksum. Full record:
+`downloads/gsi-drive-upload.log` (also uploaded to the Drive folder).
+One incident: the `files get` verification call for part02 hung >13 min;
+the part was verified instead by a fresh folder listing (size + md5
+match), and the driver was stopped rather than re-uploading and
+duplicating the part.
 
 | Field | Value |
 |---|---|
-| Drive folder | `backups/m51-hyperos/` (id `1Jichu0sPVFaiI9_YFh0bD4nLss9Nl7Ip`) |
-| Drive file | **NOT mirrored — upload failed twice (Google 500, see above)** |
-| Drive file id | — (none) |
-| Drive link | — (none) |
+| Drive folder | `backups/m51-hyperos/gsi/` (id `1Lki6WecamHlTwQpXPMkM1WvmhGk7fMNu`) |
+| Drive file | `Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip` — 3 parts, folder total 3,122,721,686 bytes (verified by listing) |
+| Part 00 | `…MysticGSI.zip.part00` — 1,073,741,824 bytes, MD5 `622d1337c71ec10457609a141a8d34b3`, id `1YRsbfrdH_C1mY5wDUim8_9x6Ju45qm3J` |
+| Part 01 | `…MysticGSI.zip.part01` — 1,073,741,824 bytes, MD5 `14be358e14f0c6db82d388277c67bfd7`, id `1naHRvWLRap4cv-XlOzF2pcbP71X-dlmd` |
+| Part 02 | `…MysticGSI.zip.part02` — 975,238,038 bytes, MD5 `eed4ad8ccb8250dd89cc42508f17bb51`, id `1raQLKWvJsqI4TeJwySrMQt71FWKq02qF` |
+| Rejoin note | `GSI-README.txt` in the same folder (id `1Pjr_kCAPRuMAc5ZFmqNoNypEVhWM1ZsD`) |
+| Upload log | `gsi-drive-upload.log` in the same folder |
+| Drive link | `https://drive.google.com/drive/folders/1Lki6WecamHlTwQpXPMkM1WvmhGk7fMNu` |
+
+Rejoin after downloading all three parts + verifying each part's MD5:
+
+```sh
+cat Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip.part?? \
+  > Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip
+sha256sum Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip
+# expect ed6c670ab9f7eb87dfbd713d348809a6546c130f83b8799cc9fac1b5acd1a03d
+md5sum Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip
+# expect 3e6337d1dd850ae2d0f7d067f8dd191c
+```
+
+SourceForge stays the primary fetch source; the Drive mirror is the
+fallback. Reproduce the mirror with `bash scripts/upload-gsi-drive.sh`.
 
 Fetch with `bash scripts/fetch-gsi.sh --build spring --out-dir downloads
 --extract` (verifies size + MD5, extracts system.img). Do NOT fetch
