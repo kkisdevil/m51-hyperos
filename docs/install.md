@@ -44,9 +44,17 @@ Default build (verified on the SourceForge listing, 2026-11-24):
 
 | Build | File | Size | Android |
 |---|---|---|---|
-| `gold` (default) | `Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip` | 3.6 GB | 15 / HyperOS 2 |
-| `spring` | `Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip` | 3.1 GB | 15 / HyperOS 2 |
-| `pudding` (experimental) | `Hyperos-pudding-16-OS3.0.50.2.W-AB-20260122-MysticGSI.zip` | 4.0 GB | 16 / HyperOS 3 |
+| `spring` (default) | `Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip` | 3.1 GB | 15 / HyperOS 2, Qualcomm (Snapdragon 6s Gen 3) |
+| `gold` | `Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip` | 3.6 GB | 15 / HyperOS 3.0.1.0, MediaTek (Dimensity 6080) |
+| `pudding` (experimental) | `Hyperos-pudding-16-OS3.0.50.2.W-AB-20260122-MysticGSI.zip` | 4.0 GB | 16 / HyperOS 3, Qualcomm (Snapdragon 8 Elite Gen 5) |
+
+> **Why spring is the default, not gold.** Gold was the old default, but
+> it is **HyperOS 3.0.1.0 on Android 15 from a MediaTek device** — a
+> MediaTek-source GSI drags in MTK telephony/camera jars and forces the
+> MTK RIL/ATMs shim chain. Spring is the actual HyperOS 2 / Android 15 /
+> Qualcomm-source build. See [gsi-verification.md](gsi-verification.md)
+> §2. Gold stays available as `--build gold` for the HyperOS 3-on-15
+> track, with that shim chain planned in from the start.
 
 Download source for the Mystic builds:
 <https://sourceforge.net/projects/mystic-gsi-updates/files/HyperOS/>
@@ -63,7 +71,7 @@ Extract `system.img` from the archive (the Mystic zips are standard
 zips):
 
 ```sh
-unzip Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip
+unzip Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip
 ```
 
 The extracted file must be a `system.img`. If the archive does not
