@@ -34,7 +34,7 @@ never Experimental Labs). This overrides the Luna-only testing rule
 for THIS tool — that rule covers testing; the user explicitly chose
 Mercury 3 from Inception here.
 
-- Base URL: `https://api.inceptionlabs.ai/v1`
+- Base URL: `api.inceptionlabs.ai/v1` (see [Inception API docs](https://docs.inceptionlabs.ai))
 - Endpoint: `POST /v1/chat/completions` (OpenAI-compatible)
 - Model: `mercury-3`
 - Key: an **Inception Mercury key** (`MERCURY_API_KEY`). 7 such keys
