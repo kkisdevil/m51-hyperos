@@ -247,8 +247,9 @@ on top, rather than the other way round.
   (`EROFS_FS=y`, `_XATTR`, `_POSIX_ACL`, `_SECURITY`, `_ZIP`,
   `_PCPU_KTHREAD`), but **an lzma-compressed EROFS GSI cannot be
   mounted by this kernel**. The GSI chosen for the port must be
-  LZ4-compressed — verify the Mystic gold image's compression before
-  relying on EROFS, and if it is lzma, either pick an LZ4 image or
+  LZ4-compressed — verify the Mystic `spring` image's compression before
+  relying on EROFS (see docs/gsi-verification.md §3 — the format is
+  unknown from public metadata), and if it is lzma, either pick an LZ4 image or
   backport `EROFS_FS_ZIP_LZMA` (a separate work item, not in this
   plan). The sdmsteppe base sets no EROFS option at all, so EROFS
   must be added explicitly — it is not inherited from either side.
@@ -452,7 +453,7 @@ In order; each is a gate, not a nicety:
 
 - [ ] `olddefconfig` unknown-symbol list — none recorded yet (no
   build has run).
-- [ ] GSI compression check — verify the Mystic gold HyperOS 2 image
+- [ ] GSI compression check — verify the Mystic `spring` HyperOS 2 image
   is LZ4-compressed EROFS (or ext4); if it is lzma EROFS, this
   kernel cannot mount it (§3.3).
 - [ ] Toolchain pin — the exact GCC/Clang versions for the kernel
