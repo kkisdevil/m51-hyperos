@@ -8,10 +8,12 @@ Companion files: [kernel-defconfig-plan.md](kernel-defconfig-plan.md)
 `.github/workflows/build-kernel.yml` (the workflow). Skill:
 `m51-rom-builder` §6.
 
-Status: **workflow written and validated locally (YAML parses, all
-13 embedded shell blocks pass `bash -n`, Gate 2 parse logic tested
-against the real defconfig). No kernel has been built yet — the
-first run is dispatched from the Actions tab after upload.**
+Status: **run #1 FAILED 2026-11-24 11:24 IST (run 45336076805,
+4m 1s) — "Install build dependencies": `E: Unable to locate
+package libtinfo5` (exit 100). `libtinfo5` is not in the noble
+repos at all; the workflow now fetches the current jammy .deb
+from the Ubuntu security pool (fix below, §1 + §5). No kernel
+has been built yet — run #2 is dispatched on the fix.**
 
 ## 1. Toolchain pin — proton-clang
 
@@ -52,15 +54,26 @@ full-Clang build fails on a 4.14-isms error (inline asm, a
 `-Werror` the old GCC tolerated), the fallback is the plan's
 original combination — see §5 below — not a different Clang.
 
-**Host-compat note (verified):** proton-clang was built on Ubuntu
-18.04 (glibc 2.27) and its `clang` links `libtinfo.so.5`, which
-ubuntu-24.04 does not ship by default. `libtinfo5` exists for
-noble (packages.ubuntu.com, HTTP 200, checked 2026-11-24), so the
-workflow installs it with the other build deps. If the runner
-image ever drops the package, the symptom is `clang: error while
-loading shared libraries: libtinfo.so.5` at the version step —
-install it from the focal `.deb` or switch the runner to
-ubuntu-22.04 (jammy also has `libtinfo5`, HTTP 200).
+**Host-compat note (corrected 2026-11-24 after run #1 failed):**
+proton-clang was built on Ubuntu 18.04 (glibc 2.27) and its `clang`
+links `libtinfo.so.5`, which ubuntu-24.04 does not ship — and
+`libtinfo5` is **not in the noble repos at all**: run #1 died in the
+"Install build dependencies" step with `E: Unable to locate package
+libtinfo5` (exit 100). The earlier claim in this doc that libtinfo5
+"exists for noble (packages.ubuntu.com, HTTP 200)" was wrong —
+`packages.ubuntu.com/noble/libtinfo5` is an error page (the bare
+HTTP 200 was the error page, not a package page), and multiple
+independent sources confirm noble dropped ncurses 5. The workflow
+therefore installs the other build deps via apt and fetches the
+current jammy `libtinfo5` .deb from the Ubuntu security pool
+(`security.ubuntu.com/ubuntu/pool/universe/n/ncurses/`, filename
+resolved from the pool listing so a superseded security revision
+cannot 404 the build — the `6.3-2ubuntu0.1` file cited in blog
+posts is already gone; current is `6.3-2ubuntu0.3`, verified
+2026-11-24, and the .deb was confirmed to contain
+`lib/x86_64-linux-gnu/libtinfo.so.5`). If the pool listing ever
+stops resolving, the fallback is switching `runs-on` to
+`ubuntu-22.04` (jammy carries `libtinfo5` natively).
 
 **What was NOT chosen, and why:**
 
@@ -179,7 +192,8 @@ Two deliberate quirks the gates already account for:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `clang: error while loading shared libraries: libtinfo.so.5` at the version step | `libtinfo5` no longer in the noble repos | Install from the focal `.deb`, or switch `runs-on` to `ubuntu-22.04` (jammy has `libtinfo5` too) |
+| `E: Unable to locate package libtinfo5` at the install step (exit 100) | `libtinfo5` is not in the noble (24.04) repos at all — the package was dropped with ncurses 6.4 | Do NOT add it to the apt install line. Install the other deps via apt and fetch the current jammy `libtinfo5` .deb from the Ubuntu security pool, resolving the filename from the pool listing (a pinned version 404s when superseded). Fixed 2026-11-24 (run #1 → run #2). |
+| `clang: error while loading shared libraries: libtinfo.so.5` at the version step | `libtinfo5` not installed (the pool fetch failed silently, or the step was skipped) | Check the install step's log for the pool fetch; if the pool listing is unreachable, switch `runs-on` to `ubuntu-22.04` (jammy has `libtinfo5` natively) |
 | `No space left on device` mid-build | Runner disk (~14 GB) exhausted by source + toolchain + output | Extend the free-disk step (drop more preinstalled dirs); check the `df -h` lines in the log for the real usage |
 | `make m51_defconfig` fails | Kconfig syntax error in the draft, or the copy step's hash check caught a drifted file | Read the error; fix the draft, re-upload, re-run |
 | Gate 2 fails on a boot-critical symbol | The driver is missing from the crDroid tree | Stop (plan §6 item 2): carry the driver from the a71-devs kernel tree, or fall back to the a71 kernel as the base. Do not ship a kernel missing `DISPLAY_SAMSUNG`/`DRM_MSM`/`WLAN`. |
