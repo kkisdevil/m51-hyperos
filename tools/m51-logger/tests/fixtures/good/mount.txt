@@ -1,0 +1,3 @@
+/dev/block/dm-0 on / type erofs (ro)
+/dev/block/dm-1 on /vendor type erofs (ro)
+/dev/block/sda23 on /data type f2fs (rw)

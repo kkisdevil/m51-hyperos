@@ -1,0 +1,1 @@
+Linux version 4.14.357-openela (builder@runner) (Android (7713838, based on r383902) clang version 13.0.0) #1 SMP PREEMPT Wed Nov 25 00:00:00 UTC 2026

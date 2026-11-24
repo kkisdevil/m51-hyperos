@@ -1,0 +1,3 @@
+Display 0 (primary) HWC2:
+  refresh-rate: 60.00 Hz
+  vsync-period: 16666666 ns

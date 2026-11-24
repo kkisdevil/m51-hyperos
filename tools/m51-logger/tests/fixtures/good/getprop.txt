@@ -1,0 +1,5 @@
+[ro.product.model]: [SM-M515F]
+[ro.build.display.id]: [UN1CA 5.4.0-f679035_20261124_m51-decrypted]
+[ro.build.version.release]: [15]
+[ro.unica.version]: [5.4.0]
+[sys.boot.reason]: [reboot]
