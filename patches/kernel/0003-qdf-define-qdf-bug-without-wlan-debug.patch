@@ -38,6 +38,20 @@ file with one more line after it. This version was regenerated
 from the real file (raw read at 4d83f24b) and verified with
 `git apply --check` against that exact file before upload.
 
+CORRECTION 2, 2026-11-24 (run #6 failed on the corrected version
+— Gate 3, "4 errors generated", qdf_trace.c:4005-4009): the
+appended definition was bare after the closing `#endif /*
+WLAN_DEBUG */`, but every #include in this file sits INSIDE that
+guard, so the appended block compiled with no declarations at
+all: implicit declaration of BUG(), no previous prototype for
+__qdf_bug (-Wmissing-prototypes), and qdf_export_symbol undefined
+(declaration specifier missing). This version makes the block
+self-contained: its own `#include <linux/bug.h>` +
+`#include <linux/export.h>`, a forward declaration of __qdf_bug,
+and the kernel's EXPORT_SYMBOL directly (qdf_export_symbol is a
+qdf macro from headers compiled out here). Same guard, same body,
+same hunk anchor as the version that applied cleanly in run #6.
+
 Applies to kkisdevil/android_kernel_samsung_sm7150 @ 4d83f24b
 (crDroid 4.14.357-openela). Applied porter-side by the
 build-kernel workflow (patches/kernel/*.patch) so the pinned
@@ -47,7 +61,7 @@ diff --git a/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c b/drive
 index 9651756..20c860e 100644
 --- a/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
 +++ b/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
-@@ -3992,3 +3992,19 @@ qdf_export_symbol(__qdf_bug);
+@@ -3992,3 +3992,33 @@ qdf_export_symbol(__qdf_bug);
  #endif /* PANIC_ON_BUG */
  #endif /* WLAN_DEBUG */
  
@@ -59,11 +73,25 @@ index 9651756..20c860e 100644
 + * the default). Without this, vmlinux fails to link with undefined
 + * reference to `__qdf_bug'. The !WLAN_DEBUG guard keeps this from
 + * duplicating the definition above when WLAN_DEBUG is on.
++ *
++ * CORRECTION 2026-11-24 (run #6, Gate 3, "4 errors generated"):
++ * the previous version appended the definition bare after the
++ * closing WLAN_DEBUG #endif, but every #include in this file sits
++ * INSIDE that guard, so the appended block had no declarations:
++ * BUG() implicitly declared, __qdf_bug with no prototype, and
++ * qdf_export_symbol undefined. This version brings its own
++ * includes plus a forward declaration and uses the kernel's
++ * EXPORT_SYMBOL directly (qdf_export_symbol is a qdf macro from
++ * headers compiled out here), so the block is self-contained.
 + */
 +#if defined(PANIC_ON_BUG) && defined(CONFIG_SLUB_DEBUG) && !defined(WLAN_DEBUG)
++#include <linux/bug.h>
++#include <linux/export.h>
++
++void __qdf_bug(void);
 +void __qdf_bug(void)
 +{
 +	BUG();
 +}
-+qdf_export_symbol(__qdf_bug);
++EXPORT_SYMBOL(__qdf_bug);
 +#endif
