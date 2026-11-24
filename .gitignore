@@ -1,0 +1,8 @@
+# downloaded GSIs and extracted images (multi-GB, never commit)
+downloads/
+*.img
+*.7z
+*.zip
+# local notes / scratch
+*.log
+.DS_Store
