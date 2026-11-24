@@ -134,17 +134,30 @@ jobs:
           sudo apt-get install -y -qq /tmp/libtinfo5_amd64.deb
           echo "nproc: $(nproc)"
 
-      - name: Put proton-clang on PATH
+      - name: Check proton-clang toolchain (no PATH export)
+        # Run #2 failed in 3s at Gate 1: proton-clang's bundled ld (2021)
+        # cannot read Ubuntu 24.04 glibc's .relr.dyn section, so linking
+        # the host tool fixdep died with "unknown type [0x13] section
+        # '.relr.dyn'". The old step prepended proton's bin/ to PATH via
+        # $GITHUB_PATH, so the host gcc's collect2 picked up proton's ld
+        # instead of the system one. Fix: NEVER put proton's bin/ on
+        # PATH. The kernel build calls clang + the cross tools by
+        # ABSOLUTE path (CC and CROSS_COMPILE below), and host tools keep
+        # using the system gcc/ld. Guard: assert `ld` still resolves to
+        # /usr/bin/ld before any make runs.
         run: |
           set -euo pipefail
-          echo "$GITHUB_WORKSPACE/toolchain/proton-clang/bin" >> "$GITHUB_PATH"
-          ls "$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang"
+          TC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin"
+          test -x "$TC/clang"
+          test -x "$TC/aarch64-linux-gnu-ld"
+          "$TC/clang" --version | head -2
+          test "$(command -v ld)" = /usr/bin/ld && echo "OK: system ld wins ($(command -v ld))"
 
       - name: Record versions and inputs
         run: |
           set -euo pipefail
           echo "== clang =="
-          clang --version | head -3
+          "$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang" --version | head -3
           echo "== kernel source =="
           git -C kernel-src rev-parse HEAD
           git -C kernel-src log -1 --format='%ci %s'
@@ -177,8 +190,8 @@ jobs:
         working-directory: kernel-src
         run: |
           set -euo pipefail
-          make O=out ARCH=arm64 CC=clang \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make O=out ARCH=arm64 CC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang" \
+            CROSS_COMPILE="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/aarch64-linux-gnu-" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
             m51_defconfig
@@ -199,8 +212,8 @@ jobs:
         working-directory: kernel-src
         run: |
           set -euo pipefail
-          make O=out ARCH=arm64 CC=clang \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make O=out ARCH=arm64 CC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang" \
+            CROSS_COMPILE="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/aarch64-linux-gnu-" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
             olddefconfig 2>&1 | tee "$GITHUB_WORKSPACE/olddefconfig.log"
@@ -253,8 +266,8 @@ jobs:
         working-directory: kernel-src
         run: |
           set -euo pipefail
-          make -j"$(nproc)" O=out ARCH=arm64 CC=clang \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make -j"$(nproc)" O=out ARCH=arm64 CC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang" \
+            CROSS_COMPILE="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/aarch64-linux-gnu-" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
             2>&1 | tee "$GITHUB_WORKSPACE/build.log"
