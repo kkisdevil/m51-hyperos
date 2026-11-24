@@ -398,6 +398,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: m51-kernel-${{ github.run_number }}
+          # .config is a dotfile: upload-artifact v4.4.0+ excludes hidden
+          # files by default, so without this the artifact silently lacks
+          # .config (run #8, m51-kernel-8) even though the path is listed.
+          # The only hidden file in the path list is .config itself, so
+          # this does not sweep anything else in.
+          include-hidden-files: true
           path: |
             kernel-src/out/arch/arm64/boot/Image.gz-dtb
             kernel-src/out/arch/arm64/boot/Image.gz
