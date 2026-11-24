@@ -59,11 +59,13 @@ the m51 — not just the GSI guide above. Phase 1 (architecture + gap map)
 is done; no code has been written yet and nothing has been flashed.
 
 - **Device trees: they exist.** The m51 has a complete tree set
-  (`a71-devs`: m51 device tree + `a71-common` + 4.14 kernel + ~969
+  (`a71-devs`: m51 device tree + `a71-common` + 4.14 kernel + 913
   proprietary blobs) that has booted Android 14, 15 and (with patches) 16.
-  But the m51 repos are **frozen since 2025-07-15** — only the A71 side is
+  But the m51 repos are **frozen since 2025-04-29** — only the A71 side is
   still maintained — so the port starts from a takeover, not a living
   upstream. Freshest kernel available: crDroid's 4.14.357-openela.
+  Phase 0 audit: [docs/tree-takeover.md](docs/tree-takeover.md),
+  pins: [trees/manifest.json](trees/manifest.json).
 - **The real problem is HIDL vs AIDL, not VNDK.** Xiaomi's own vendor is
   frozen at API 31 too. HyperOS 2 (Android 15) still tolerates the m51's
   HIDL vendor, so it is plausible as an experiment. HyperOS 3 (Android 16)
@@ -79,6 +81,25 @@ is done; no code has been written yet and nothing has been flashed.
   (trees, HyperOS structure, 24-row gap table) and
   [docs/port-plan.md](docs/port-plan.md) (architecture, ordered phases,
   what needs a real m51, honest limits).
+
+### Forks — Phase 0 done 2026-11-24
+
+The takeover base, forked under
+[kkisdevil](https://github.com/kkisdevil) with upstream names kept:
+
+| Fork | Upstream | Branch / pin |
+|---|---|---|
+| [android_device_samsung_m51](https://github.com/kkisdevil/android_device_samsung_m51) | a71-devs | lineage-22.2 / `55df7b4a` |
+| [android_device_samsung_a71-common](https://github.com/kkisdevil/android_device_samsung_a71-common) | a71-devs | lineage-22.2 / `48e5e36e` |
+| [android_kernel_samsung_sm7150](https://github.com/kkisdevil/android_kernel_samsung_sm7150) | crdroidandroid | 16.0 / `4d83f24b` (4.14.357-openela) |
+| [android_vendor_samsung_m51](https://github.com/kkisdevil/android_vendor_samsung_m51) | a71-devs | lineage-22.2 / `de409289` |
+| [android_vendor_samsung_a71-common](https://github.com/kkisdevil/android_vendor_samsung_a71-common) | a71-devs | lineage-22.2 / `407f21e5` |
+
+Not forked: `a71-devs/android_kernel_samsung_a71` (superseded as the
+kernel base — its `m51_defconfig` is still the reference defconfig).
+One open blocker: the crDroid kernel has no `m51_defconfig` and its
+build script names a config that does not exist — see
+[docs/tree-takeover.md](docs/tree-takeover.md) §3.3.
 
 ## Prerequisites
 
@@ -135,7 +156,10 @@ m51-hyperos/
 │   ├── known-issues.md        # expected broken things + workarounds
 │   ├── faq.md                 # questions everyone asks
 │   ├── reverse-engineering.md # phase 1: trees, HyperOS structure, gap table
-│   └── port-plan.md           # phase 1: port architecture + work phases
+│   ├── port-plan.md           # phase 1: port architecture + work phases
+│   └── tree-takeover.md       # phase 0: pinned trees, audit, fork plan
+├── trees/
+│   └── manifest.json          # machine-readable pins + fork records
 ├── scripts/
 │   ├── fetch-gsi.sh           # download a HyperOS GSI (HyperOS 2 default)
 │   └── verify-device.sh       # go / no-go prerequisite check over adb
