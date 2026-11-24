@@ -67,8 +67,33 @@ is off and the fork has NO tags, so `scm_version --short` prints
 `+` even on a clean tree; the porter patches (dirty tree) are not
 the cause and committing them would NOT fix it. Fix: job-level
 `env: LOCALVERSION: ""` — with LOCALVERSION set (even empty) the
-script skips the `+` branch (fix below, §5). No kernel has been
-built yet — run #8 is dispatched on the fix.**
+script skips the `+` branch (fix below, §5). Run #8 SUCCEEDED
+2026-11-24 ~15:56 IST (run 45372379403, 15m 4s, commit 928c890):
+all 7 gates green, version string exactly `4.14.357-openela`,
+artifact `m51-kernel-8` (14-day retention: Image.gz-dtb, Image.gz,
+.config, savedefconfig, dropped-symbols.txt, olddefconfig.log,
+build.log). **First m51 kernel ever built.** One warning only:
+actions/upload-artifact@v4 deprecated Node.js version. Still owed:
+human review of savedefconfig + dropped-symbols.txt before
+commit-back as kernel/m51_defconfig, and the Gate 8 boot test on
+the physical m51.**
+
+**Review + commit-back DONE 2026-11-24 ~17:45 IST:** the
+`m51-kernel-8` artifact was downloaded (SHA-256 verified against
+GitHub's `c7086a7e…`) and reviewed — `dropped-symbols.txt` (32
+symbols, none boot-critical; `MSM_NPU_V2` dropped only because
+that symbol does not exist in the crDroid tree, `MSM_NPU=y`
+covers the NPU), `Image.gz-dtb` 19,725,654 bytes (fits 64 MB),
+spot-checked symbols all `=y` in the savedefconfig — and the
+reviewed savedefconfig (SHA-256 `94b251e2…`, 23,551 B, 909 CONFIG
+lines) was committed back as `kernel/m51_defconfig`, replacing
+the 181,825 B draft. **CORRECTION to the run #8 note above: the
+artifact did NOT contain `.config`** — the upload step listed
+`kernel-src/out/.config`, but upload-artifact v4.4.0+ excludes
+hidden files by default, so the dotfile was silently skipped
+(the step stayed green because the other paths matched).
+Fix: `include-hidden-files: true` on the upload step (see §5).
+Still owed: the Gate 8 boot test on the physical m51.**
 
 ## 1. Toolchain pin — proton-clang
 
@@ -256,6 +281,7 @@ Two deliberate quirks the gates already account for:
 | `error: patch failed: .../qdf_trace.c:3991` / `patch does not apply` at the "Apply porter kernel patches" step, run #5 (6m 27s) | The 0003 patch's hunk was written against a reconstruction of `qdf_trace.c` ending at line 3993; the real file at the pinned commit ends with a trailing blank line (line 3994). git apply / GNU patch refuse a hunk whose old side ends at the reconstruction's EOF when the real file has one more line — verified locally: the same hunk applies to a truncated copy ending at 3993 and fails on the real file | **Never write a patch against a reconstruction.** Regenerate the patch from the real file (raw read at the pinned commit) — or generate it by editing the real file and taking `git diff` — and always run `git apply --check` against the real file (not a reconstruction) before upload. The corrected 0003 (hunk `@@ -3992,3`, trailing blank line as context, appends after it) passes `git apply --check` on the real file. Fixed 2026-11-24 (run #5 → run #6). |
 | `qdf_trace.c:4007: error: implicit declaration of function 'BUG'` + `4005: no previous prototype for '__qdf_bug'` + `4009: declaration specifier missing` on `qdf_export_symbol` ("4 errors generated") at Gate 3, run #6 (12m 30s) | The corrected 0003 applied cleanly, but its appended `__qdf_bug()` definition sits after the closing `#endif /* WLAN_DEBUG */` — and EVERY #include in `qdf_trace.c` is inside that guard (line 46), so the appended block compiled with no declarations at all: no `<linux/bug.h>` for BUG(), no prototype (the header's extern declaration is in i_qdf_trace.h, also compiled out here), and `qdf_export_symbol` (a qdf macro from qdf_module.h) undefined. Verified against the run #6 log (verbatim lines 4693-4710) + the real file's guard structure | Make the appended block self-contained: its own `#include <linux/bug.h>` + `#include <linux/export.h>`, a forward declaration `void __qdf_bug(void);`, and the kernel's `EXPORT_SYMBOL(__qdf_bug)` directly instead of the qdf macro. Same guard, same body, same hunk anchor (the anchor applied cleanly in run #6, so it is kept byte-identical). Verified locally: `git apply --check` passes against a file carrying the exact EOF context, and the added block passes `gcc -fsyntax-only -Werror -Wmissing-prototypes -Wimplicit-function-declaration` (the same warnings that are -Werror in the build), in both guard-on and guard-off variants. Fixed 2026-11-24 (run #6 → run #7). |
 | `kernelrelease: 4.14.357-openela+` — Gate 5 fails ("wrong kernel tree built") although the kernel built fine, run #7 (18m 28s; Gate 3 13m 8s, Gate 4 passed) | The trailing `+` is `scripts/setlocalversion`'s dirty-tree marker, but the porter patches are NOT the cause. With `CONFIG_LOCALVERSION_AUTO` off (defconfig line 100) the script takes its else-branch: it runs `scm_version --short` and appends `+` if that is non-empty. `--short` prints `+` whenever HEAD is not at an exact-match annotated/signed tag — and the fork has NO tags at all (`git ls-remote --tags` on `kkisdevil/android_kernel_samsung_sm7150` is empty; HEAD is `4d83f24b`). So the `+` appears even on a perfectly clean tree (verified locally: clean tagless checkout → `+`). Committing the porter patches inside kernel-src would NOT fix it — HEAD would still not be at a tag. NOT a wrong-tree build: `4.14.357` + `EXTRAVERSION = -openela` (Makefile line 5) is the right tree; only the suffix is wrong | Set `LOCALVERSION` in the job environment (`env: LOCALVERSION: ""` at job level in build-kernel.yml). With `LOCALVERSION` set — even empty — the script's `${LOCALVERSION+set}` test skips the `+` branch entirely, and `res` gains nothing from the empty value, so kernelrelease is exactly `4.14.357-openela`. A job-level env var is used rather than `LOCALVERSION=` on the make command lines: the env var reaches the script at every call site (verified locally against the real setlocalversion at the pinned commit — dirty tree, clean tree, and a mini-Makefile mimicking the kernel's recipe-line `$()` invocation: env → no `+`; no env → `+`). Fixed 2026-11-24 (run #7 → run #8). |
+| Artifact `m51-kernel-8` (run #8, green) contains NO `.config`, although the upload step lists `kernel-src/out/.config` — and the step stayed green | `actions/upload-artifact` v4.4.0+ **excludes hidden files (dotfiles) by default** — a breaking change so credentials are not swept into artifacts by accident. `.config` is a dotfile, so the glob silently dropped it; `if-no-files-found: error` did not fire because the other paths matched. Verified: the downloaded artifact (SHA-256 `c7086a7e…`, matches GitHub) holds only build.log, dropped-symbols.txt, olddefconfig.log, savedefconfig, Image.gz, Image.gz-dtb. The Gates 6/7 greps of `out/.config` on the runner had passed, so `.config` existed — it was the upload that dropped it | Set `include-hidden-files: true` on the "Upload kernel artifacts" step (documented input in the upload-artifact v4 README). The only hidden file in the path list is `.config` itself, so this does not sweep anything else in. Fixed 2026-11-24 (applies from the next run; run #8's artifact stays as-is). **Check on every future artifact: a listed path is not proof the file landed — verify the artifact contents after download.** |
 | `clang: error while loading shared libraries: libtinfo.so.5` at the version step | `libtinfo5` not installed (the pool fetch failed silently, or the step was skipped) | Check the install step's log for the pool fetch; if the pool listing is unreachable, switch `runs-on` to `ubuntu-22.04` (jammy has `libtinfo5` natively) |
 | `No space left on device` mid-build | Runner disk (~14 GB) exhausted by source + toolchain + output | Extend the free-disk step (drop more preinstalled dirs); check the `df -h` lines in the log for the real usage |
 | `make m51_defconfig` fails | Kconfig syntax error in the draft, or the copy step's hash check caught a drifted file | Read the error; fix the draft, re-upload, re-run |
@@ -268,19 +294,29 @@ Two deliberate quirks the gates already account for:
 
 ## 6. Open items (filled in by the first build)
 
-- [ ] `olddefconfig` unknown-symbol list — none recorded yet (no
-  build has run). Comes from `dropped-symbols.txt`.
-- [ ] Real wall time + toolchain clone size + disk usage — first
-  measurements from run #7 (2026-11-24, 18m 28s total): Gate 3
-  build 13m 8s; proton-clang checkout 1m 37s; kernel fork checkout
-  42s; free-disk step 2m 34s. Toolchain clone size / disk usage
-  still unrecorded (the `df -h` lines are in the run #7 log, not
-  yet transcribed).
-- [ ] `savedefconfig` commit-back — manual, after reviewing the
-  diff (plan §6 item 3).
-- [ ] `DISPLAY_SAMSUNG` / `DRM_MSM` / `WLAN` existence in the
-  crDroid Kconfig tree — unproven until the first `olddefconfig`
-  (Gate 2).
+- [x] `olddefconfig` unknown-symbol list — **RECORDED 2026-11-24
+  (run #8, plan §7):** 32 symbols in `dropped-symbols.txt`,
+  none boot-critical. `MSM_NPU_V2` dropped only because that
+  symbol does not exist in the crDroid tree (`MSM_NPU=y` covers
+  the NPU).
+- [x] Real wall time + toolchain clone size + disk usage — run #8
+  (2026-11-24, SUCCEEDED): 15m 4s total (job 15m 0s). Run #7
+  measurements (18m 28s total): Gate 3 build 13m 8s; proton-clang
+  checkout 1m 37s; kernel fork checkout 42s; free-disk step
+  2m 34s. Toolchain clone size / disk usage still unrecorded.
+- [x] `savedefconfig` commit-back — **DONE 2026-11-24:** reviewed
+  savedefconfig (SHA-256 `94b251e2…`, 23,551 B, 909 CONFIG lines)
+  committed back as `kernel/m51_defconfig`, replacing the
+  181,825 B draft (plan §6 item 3, §7).
+- [x] `DISPLAY_SAMSUNG` / `DRM_MSM` / `WLAN` existence in the
+  crDroid Kconfig tree — **RESOLVED 2026-11-24 (run #8):** none
+  of the three was dropped by `olddefconfig`, so all three exist
+  in the crDroid tree.
+- [x] `.config` missing from the run #8 artifact — **ROOT CAUSE
+  FOUND + FIXED 2026-11-24:** upload-artifact v4.4.0+ excludes
+  hidden files by default; `.config` is a dotfile. Fix:
+  `include-hidden-files: true` on the upload step (§5). Applies
+  from the next run.
 - [ ] Boot test on the physical m51 (Gate 8) — needs the phone.
 - [ ] GSI compression check — verify the Mystic `spring` HyperOS 2
   image is LZ4-compressed EROFS (or ext4); if it is lzma EROFS,
