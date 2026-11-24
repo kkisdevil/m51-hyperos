@@ -456,8 +456,15 @@ In order; each is a gate, not a nicety:
 - [ ] GSI compression check — verify the Mystic `spring` HyperOS 2 image
   is LZ4-compressed EROFS (or ext4); if it is lzma EROFS, this
   kernel cannot mount it (§3.3).
-- [ ] Toolchain pin — the exact GCC/Clang versions for the kernel
-  job are not chosen yet (§5 step 0).
+- [ ] Toolchain pin — **RESOLVED 2026-11-24** (docs/kernel-build.md
+  §1 + `.github/workflows/build-kernel.yml`): proton-clang
+  `kdrag0n/proton-clang` @ `9fb011b1` (frozen master HEAD,
+  2021-05-22, Clang 13.0.0), full-Clang build (`CC=clang`,
+  `CROSS_COMPILE=aarch64-linux-gnu-`, bundled GNU binutils, no
+  GCC needed); `libtinfo5` installed on the runner for the
+  Ubuntu-18.04-built binaries. Fallback if proton-clang fails:
+  AOSP Clang r383902 + GCC 4.9 (archive URLs unverified — verify
+  before wiring in).
 - [ ] `DISPLAY_SAMSUNG` / `DRM_MSM` / `WLAN` existence in the
   crDroid Kconfig tree — unproven until the first `olddefconfig`
   (§6 item 2). The `m51.config` fragment proves the panel/sensor
