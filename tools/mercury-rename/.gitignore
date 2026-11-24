@@ -1,0 +1,7 @@
+# Ghidra install + downloads + caches — never committed.
+ghidra/
+downloads/
+cache/
+__pycache__/
+*.pyc
+.env
