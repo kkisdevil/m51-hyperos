@@ -498,8 +498,8 @@ with the upstream commit named in the message.
 
 | Criterion (port-plan.md §3 Phase 0) | Status 2026-11-24 |
 |---|---|
-| Fork the five a71-devs repos; record the fork point | **Pins recorded (§1). Forks not yet created** — next action, via browser. |
-| Swap the kernel to crDroid 4.14.357-openela; verify it builds for the m51 defconfig | **Blocked on §3.3** — no `m51_defconfig` in the crDroid tree; `build_kernel.sh` references a non-existent defconfig. Defconfig assembly must be resolved before any kernel build is attempted. |
+| Fork the five a71-devs repos; record the fork point | **DONE 2026-11-24** — all 5 forks created under kkisdevil (device m51, a71-common, crDroid kernel sm7150, vendor m51, vendor a71-common); recorded in trees/manifest.json + README. |
+| Swap the kernel to crDroid 4.14.357-openela; verify it builds for the m51 defconfig | **Resolved in plan 2026-11-24** — see docs/kernel-defconfig-plan.md + kernel/m51_defconfig (merged defconfig: a71 base + 4 flips + 9 appends; corrected build command; 8 first-build gates). Kernel build not yet attempted. |
 | Re-extract vendor blobs from M515FXXU6DXJ2; diff against the frozen set | **Not started** — needs the DXJ2 firmware download (multi-GB, out of scope for this audit step). |
 | Cross-check against live LineageOS a71 `lineage-23.x` | **Not started** — repos identified (§7); the diff is owed. |
 | Trees build (AOSP/Lineage) and boot to the existing LineageOS state; blob inventory documented; kernel version recorded | **Not started** — no build has been attempted. Blob inventory: 913 entries (§2.2). Kernel version: 4.14.357-openela (crDroid) / 4.14.336 (a71-devs). |
@@ -521,8 +521,10 @@ with the upstream commit named in the message.
 
 ## 10. Open checks carried out of Phase 0
 
-1. Defconfig assembly for the crDroid kernel (§3.3) — the one
-   blocker. Resolve before any kernel build.
+1. Defconfig assembly for the crDroid kernel (§3.3) — **resolved in
+   plan 2026-11-24** (docs/kernel-defconfig-plan.md + kernel/m51_defconfig);
+   first-build verification gates in plan §7. The kernel itself is
+   still unbuilt.
 2. VINTF declaration for camera/composer/sensors/power/thermal/
    health/vibrator/wifi/drm/light/allocator/mapper (§3.2) —
    verify with `check_vintf` on the first build.
