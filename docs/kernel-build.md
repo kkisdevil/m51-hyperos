@@ -12,8 +12,15 @@ Status: **run #1 FAILED 2026-11-24 11:24 IST (run 45336076805,
 4m 1s) — "Install build dependencies": `E: Unable to locate
 package libtinfo5` (exit 100). `libtinfo5` is not in the noble
 repos at all; the workflow now fetches the current jammy .deb
-from the Ubuntu security pool (fix below, §1 + §5). No kernel
-has been built yet — run #2 is dispatched on the fix.**
+from the Ubuntu security pool (fix below, §1 + §5). Run #2 FAILED
+2026-11-24 11:50 IST (run 45338891003, 6m 25s) — Gate 1 died in
+3s: proton-clang's bundled `ld` cannot read Ubuntu 24.04 glibc's
+`.relr.dyn` section, so linking the host tool `fixdep` failed
+("unknown type [0x13] section '.relr.dyn'"). The fix: NEVER put
+proton's `bin/` on PATH — the build now calls clang + the cross
+tools by absolute path, and host tools keep the system gcc/ld
+(fix below, §2 + §5). No kernel has been built yet — run #3 is
+dispatched on the fix.**
 
 ## 1. Toolchain pin — proton-clang
 
@@ -193,6 +200,8 @@ Two deliberate quirks the gates already account for:
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `E: Unable to locate package libtinfo5` at the install step (exit 100) | `libtinfo5` is not in the noble (24.04) repos at all — the package was dropped with ncurses 6.4 | Do NOT add it to the apt install line. Install the other deps via apt and fetch the current jammy `libtinfo5` .deb from the Ubuntu security pool, resolving the filename from the pool listing (a pinned version 404s when superseded). Fixed 2026-11-24 (run #1 → run #2). |
+| `unknown type [0x13] section '.relr.dyn'` from `toolchain/proton-clang/bin/ld` while building `scripts/basic/fixdep`, Gate 1 dies in seconds | proton-clang's bundled `ld` (2021) predates the RELR section type and cannot read Ubuntu 24.04 glibc. The workflow had prepended proton's `bin/` to PATH, so the host gcc's collect2 picked up proton's `ld` instead of the system one. NOT a defconfig/Kconfig error — the build died before any config processing | NEVER put the toolchain's `bin/` on PATH. Call clang + the cross tools by absolute path (`CC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang"`, `CROSS_COMPILE="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/aarch64-linux-gnu-"`) and assert `command -v ld` is `/usr/bin/ld` before any make runs. Fixed 2026-11-24 (run #2 → run #3). |
+| `make[1]: ../scripts/clang-android.sh: No such file or directory` at Gate 1 (warning only) | The crDroid tree has no `scripts/clang-android.sh` (an AOSP helper the kernel Makefile references) | Non-fatal — make continues past it. Do not chase it unless a later step fails on a missing clang wrapper flag. Noted 2026-11-24 (run #2 log). |
 | `clang: error while loading shared libraries: libtinfo.so.5` at the version step | `libtinfo5` not installed (the pool fetch failed silently, or the step was skipped) | Check the install step's log for the pool fetch; if the pool listing is unreachable, switch `runs-on` to `ubuntu-22.04` (jammy has `libtinfo5` natively) |
 | `No space left on device` mid-build | Runner disk (~14 GB) exhausted by source + toolchain + output | Extend the free-disk step (drop more preinstalled dirs); check the `df -h` lines in the log for the real usage |
 | `make m51_defconfig` fails | Kconfig syntax error in the draft, or the copy step's hash check caught a drifted file | Read the error; fix the draft, re-upload, re-run |
