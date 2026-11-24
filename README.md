@@ -52,6 +52,34 @@ An experiment, not a daily driver (yet).
   downloaded by you, from the community sources, with
   [scripts/fetch-gsi.sh](scripts/fetch-gsi.sh).
 
+## Reverse-engineering status — device-specific port (phase 1 done)
+
+The user asked for HyperOS completely reverse-engineered and rebuilt for
+the m51 — not just the GSI guide above. Phase 1 (architecture + gap map)
+is done; no code has been written yet and nothing has been flashed.
+
+- **Device trees: they exist.** The m51 has a complete tree set
+  (`a71-devs`: m51 device tree + `a71-common` + 4.14 kernel + ~969
+  proprietary blobs) that has booted Android 14, 15 and (with patches) 16.
+  But the m51 repos are **frozen since 2025-07-15** — only the A71 side is
+  still maintained — so the port starts from a takeover, not a living
+  upstream. Freshest kernel available: crDroid's 4.14.357-openela.
+- **The real problem is HIDL vs AIDL, not VNDK.** Xiaomi's own vendor is
+  frozen at API 31 too. HyperOS 2 (Android 15) still tolerates the m51's
+  HIDL vendor, so it is plausible as an experiment. HyperOS 3 (Android 16)
+  tooling explicitly refuses HIDL-only pre-Android-13 vendors — it is a
+  research project, not a port.
+- **Hardest gaps:** RIL/IMS/VoLTE, camera, the side fingerprint sensor,
+  SELinux + the HyperOS 3 HIDL→AIDL cliff, and display/lights/brightness.
+- **Plan:** Qualcomm-source HyperOS 2 GSI as the base, forked a71-devs
+  trees + crDroid kernel, vendor blobs re-extracted from the latest stock,
+  per-device RRO overlay, A03-style smali patches, and HAL bridges
+  (VNDKLite config, sensor shim, audio policy, Floss IMS per carrier).
+  Full detail: [docs/reverse-engineering.md](docs/reverse-engineering.md)
+  (trees, HyperOS structure, 24-row gap table) and
+  [docs/port-plan.md](docs/port-plan.md) (architecture, ordered phases,
+  what needs a real m51, honest limits).
+
 ## Prerequisites
 
 - Samsung Galaxy M51, model **SM-M515F** (international). No other model
@@ -105,7 +133,9 @@ m51-hyperos/
 │   ├── install.md             # full flash guide (TWRP + fastbootd)
 │   ├── dsu-trial.md           # DSU Sideloader trial boot (do this first)
 │   ├── known-issues.md        # expected broken things + workarounds
-│   └── faq.md                 # questions everyone asks
+│   ├── faq.md                 # questions everyone asks
+│   ├── reverse-engineering.md # phase 1: trees, HyperOS structure, gap table
+│   └── port-plan.md           # phase 1: port architecture + work phases
 ├── scripts/
 │   ├── fetch-gsi.sh           # download a HyperOS GSI (HyperOS 2 default)
 │   └── verify-device.sh       # go / no-go prerequisite check over adb
