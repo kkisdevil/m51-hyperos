@@ -6,3 +6,5 @@ downloads/
 # local notes / scratch
 *.log
 .DS_Store
+# device-tree audit scratch (cloned trees, never commit)
+trees-scratch/
