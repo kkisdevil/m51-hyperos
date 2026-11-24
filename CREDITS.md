@@ -75,6 +75,48 @@ without them. If you use this repo, credit them too.
 - XDA, "How to install hyperos on A546E and all variants (Binary 7+)" —
   A54 DSU method; also where the (now dead) FoxetGSI build link was quoted.
 
+## Vendored pieces (2026-11-24, `vendor/`)
+
+The `vendor/` directory holds our own implementations of patterns
+borrowed from the projects below (each file names its source in its
+header). Nothing was copied verbatim without a compatibility pass.
+
+- **Arnav3078 / Hyper371-M51** — device-specific HyperOS 3.1 port
+  for the m51 (docs-only, first boot pending): the verification-record
+  format, the offline `secilc` combined-policy compile check, the
+  VINTF parser precheck method, the partition layout numbers, and the
+  EFS byte-for-byte backup gate. No license file — method borrowed,
+  never code.
+- **Arnav3078 / ColorOS17-SM7150** (GPL-3.0) — ColorOS 17 port for the
+  m51: the `patch_boot.py` permissive-boot pattern, the vendor fstab
+  recipe, the recovery-overwriter removal (the TWRP-preservation
+  mechanism), the EROFS repack + super sizing recipe, the m51.cil
+  sepolicy template, the fingerprint @2.1 mapping, the TEE-daemon
+  neutralisation pattern, and the VoLTE bypass (fallback only).
+  Credits in that repo: toraidl, OPPO & OnePlus.
+- **Arnav3078 / OneOS-SM7150** (Apache-2.0, fork of fahadalijaved/OneOS)
+  — the Nov 23 black-screen backlight fix (panel0-backlight node,
+  `actual_brightness`, `bl_power`, early-unblank value), the HWC-off
+  fallback, the backlight nits-table conversion (sysfs range 0..13510),
+  the Samsung IMS staging inventory, and the miui-services guard
+  patterns (fail-closed, hash-checked).
+- **mehedihjoy0 / SpiderGirl-OS** (MIT, fork of SameerAlSahab/ProjectAstro)
+  — the HIDL→AIDL HAL-swap patterns (lights, vibrator, snap camera
+  from r9q blobs) and the FCM 4→5 bump + configstore removal recipe.
+- **SameerAlSahab / ProjectArcadeX** (MIT) — the `auto_gen` pattern
+  (derive device facts from the stock firmware instead of hand-writing
+  configs), the md5 marker-caching idempotency pattern, and the
+  vendored samfirm.js download route.
+- **kurtnettle / LostPrime kernel** — the AnyKernel3 packaging pattern
+  (Image + dtb + dtbo, boot only) and the `build.sh` defconfig assembly
+  pattern. ThinLTO is evaluate-only.
+- **topjohnwu / samloader-rs** (v2.0.0) — the Samsung firmware
+  downloader that replaces the dead PyPI samloader.
+- **jesec / samfirm.js** (GPL-3.0-or-later, v0.2.0) — the third
+  firmware-download route (fetch-only, verify the hash first).
+- **techtoktomato / Hyper371** — the original Hyper371 donor port for
+  the Galaxy A71 that Arnav's Hyper371-M51 re-targets to the m51.
+
 ## This repo
 
 - **kkisdevil / Kartik Deepak Sormare** — this repo, its scripts and docs
