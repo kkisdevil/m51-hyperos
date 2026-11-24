@@ -1,0 +1,316 @@
+# Copyright (c) 2026 Kartik Deepak Sormare (kkisdevil) — m51-hyperos
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# build-kernel.yml — first kernel build for the Galaxy M51 (SM-M515F).
+#
+# Manual dispatch only (workflow_dispatch). It builds the crDroid
+# 4.14.357-openela kernel from the fork
+# kkisdevil/android_kernel_samsung_sm7150, using the merged
+# kernel/m51_defconfig from THIS repo (a71-devs m51_defconfig base +
+# crDroid deltas — see docs/kernel-defconfig-plan.md), and the pinned
+# proton-clang toolchain. Output is Image.gz-dtb, the boot image
+# kernel this device boots (BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb).
+#
+# It does NOT run the tree's build_kernel.sh — that script is broken
+# three ways (nonexistent a71_eur_open_defconfig, toolchain paths that
+# do not exist in the standalone repo, copies plain Image instead of
+# Image.gz-dtb). See docs/kernel-defconfig-plan.md §2.2.
+#
+# It commits NOTHING back. The savedefconfig output is uploaded as an
+# artifact; a human reviews the diff and commits it back as the
+# canonical m51_defconfig (plan §6 item 3). It flashes nothing and
+# touches no phone — the boot test (plan §6 item 8) needs the
+# physical m51 and is a separate, manual step.
+#
+# The 8 first-build verification gates (plan §6) are workflow steps:
+#   1. make m51_defconfig completes
+#   2. make olddefconfig — dropped symbols recorded, job FAILS if a
+#      boot-critical symbol was dropped (DISPLAY_SAMSUNG, DRM_MSM,
+#      WLAN, SECURITY_SELINUX_DEVELOP, FS_ENCRYPTION, SECCOMP_FILTER,
+#      FS_ENCRYPTION_INLINE_CRYPT, ANDROID_BINDER_IPC, ASHMEM)
+#   3. savedefconfig output uploaded (commit-back is manual)
+#   4. build completes; Image.gz-dtb exists and fits the 64 MB boot
+#      partition
+#   5. kernel version string reads 4.14.357-openela
+#   6. EROFS is in the built kernel (EROFS_FS + ZIP =y, LZMA absent —
+#      the backport is LZ4-only)
+#   7. SELinux permissive is possible (SECURITY_SELINUX_DEVELOP=y)
+#   8. boot test — NOT in this workflow (needs the physical m51)
+name: Build kernel (m51)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_ref:
+        description: 'Kernel source ref in kkisdevil/android_kernel_samsung_sm7150 (commit or branch)'
+        required: false
+        default: '4d83f24bf0b0a32de8066096c0b7eb00d53b3a79'
+      toolchain_ref:
+        description: 'proton-clang ref (commit) — frozen master HEAD, 2021-05-22'
+        required: false
+        default: '9fb011b183fe7e69b04b873ef6533b4b077e3c5e'
+
+permissions:
+  contents: read
+
+# Kernel builds are long; never cancel a running one on re-dispatch.
+concurrency:
+  group: build-kernel-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-kernel:
+    name: Build kernel (m51)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out m51-hyperos (this repo — defconfig + docs)
+        uses: actions/checkout@v7
+
+      - name: Check out kernel fork
+        uses: actions/checkout@v7
+        with:
+          repository: kkisdevil/android_kernel_samsung_sm7150
+          ref: ${{ inputs.kernel_ref }}
+          path: kernel-src
+          fetch-depth: 1
+
+      - name: Check out proton-clang toolchain
+        uses: actions/checkout@v7
+        with:
+          repository: kdrag0n/proton-clang
+          ref: ${{ inputs.toolchain_ref }}
+          path: toolchain/proton-clang
+          fetch-depth: 1
+
+      - name: Free disk space
+        # GitHub-hosted standard runners have ~14 GB of free SSD.
+        # Kernel source + toolchain clone + build output approach
+        # that, so reclaim the big preinstalled directories first
+        # (same pattern as the UN1CA build workflow's free-disk steps).
+        run: |
+          set -euo pipefail
+          echo "== disk before =="
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/hostedtoolcache \
+            /usr/local/lib/android /opt/ghc /usr/local/share/boost \
+            /usr/share/swift 2>/dev/null || true
+          echo "== disk after =="
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          # bc/bison/flex/libssl-dev/libelf-dev: kernel build deps.
+          # libtinfo5: proton-clang was built on Ubuntu 18.04
+          # (glibc 2.27) and its clang binary links libtinfo.so.5,
+          # which ubuntu-24.04 does not ship by default.
+          sudo apt-get install -y -qq \
+            bc bison flex libssl-dev libelf-dev libtinfo5
+          echo "nproc: $(nproc)"
+
+      - name: Put proton-clang on PATH
+        run: |
+          set -euo pipefail
+          echo "$GITHUB_WORKSPACE/toolchain/proton-clang/bin" >> "$GITHUB_PATH"
+          ls "$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang"
+
+      - name: Record versions and inputs
+        run: |
+          set -euo pipefail
+          echo "== clang =="
+          clang --version | head -3
+          echo "== kernel source =="
+          git -C kernel-src rev-parse HEAD
+          git -C kernel-src log -1 --format='%ci %s'
+          echo "== defconfig (this repo) =="
+          sha256sum kernel/m51_defconfig
+          wc -l kernel/m51_defconfig
+          echo "== in-tree dtc (needed by DTC_EXT) =="
+          test -d kernel-src/tools/dtc && echo "OK: kernel-src/tools/dtc exists"
+          echo "== disk =="
+          df -h
+
+      - name: Install merged defconfig into the kernel tree
+        # kernel/m51_defconfig is the a71-devs m51_defconfig verbatim
+        # (SHA-256 63c4b4f1…) plus the crDroid deltas from
+        # docs/kernel-defconfig-plan.md §4. Its own header carries the
+        # full lineage + credit; verify the copy is byte-identical to
+        # the draft before building from it.
+        run: |
+          set -euo pipefail
+          cp kernel/m51_defconfig kernel-src/arch/arm64/configs/m51_defconfig
+          EXPECTED=bcbab559cb85dc77f470f0216c2b3ec2445d4003d4e56dbb18f520788cfbfc91
+          ACTUAL=$(sha256sum kernel-src/arch/arm64/configs/m51_defconfig | cut -d' ' -f1)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::m51_defconfig copy hash mismatch: got $ACTUAL, want $EXPECTED"
+            exit 1
+          fi
+          echo "OK: defconfig copied, SHA-256 matches the draft"
+
+      - name: 'Gate 1 — make m51_defconfig'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          make O=out ARCH=arm64 CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
+            m51_defconfig
+          test -f out/.config && echo "OK: out/.config written"
+
+      - name: 'Gate 2 — make olddefconfig (record dropped symbols)'
+        # olddefconfig normalises the defconfig against the crDroid
+        # tree's Kconfig. Any a71 option that no longer exists is
+        # dropped silently — so diff the input defconfig against the
+        # resulting .config mechanically and FAIL if a boot-critical
+        # symbol was dropped (that means the driver is missing from
+        # this tree and the plan must change, plan §6 item 2).
+        # NOTE: the draft has two deliberate duplicates — the porter
+        # section appends CONFIG_CPU_BOOST=y and CONFIG_MSM_NPU_V2=y
+        # after earlier "# ... is not set" lines. Kconfig resolves
+        # duplicates last-wins, so olddefconfig settles them to =y;
+        # they are NOT dropped symbols and must not trip this gate.
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          make O=out ARCH=arm64 CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
+            olddefconfig 2>&1 | tee "$GITHUB_WORKSPACE/olddefconfig.log"
+          python3 - <<'PY'
+          import sys
+
+          def parse(path):
+              opts = {}
+              with open(path, encoding='utf-8', errors='replace') as f:
+                  for line in f:
+                      line = line.strip()
+                      if line.startswith('# CONFIG_') and line.endswith('is not set'):
+                          opts[line.split()[1]] = 'n'
+                      elif line.startswith('CONFIG_') and '=' in line:
+                          k, v = line.split('=', 1)
+                          opts[k] = v.strip().strip('"')
+              return opts
+
+          before = parse('arch/arm64/configs/m51_defconfig')
+          after = parse('out/.config')
+          # An option counts as enabled in the input if it is =y/=m or
+          # a non-empty value; "not set" lines for appended options
+          # (CPU_BOOST, MSM_NPU_V2) are superseded by their later =y.
+          enabled_in = {k for k, v in before.items() if v not in ('n', '')}
+          enabled_after = {k for k, v in after.items() if v not in ('n', '')}
+          dropped = sorted(enabled_in - enabled_after)
+          newly = sorted(enabled_after - enabled_in)
+          with open(f'{__import__("os").environ["GITHUB_WORKSPACE"]}/dropped-symbols.txt', 'w') as f:
+              for s in dropped:
+                  f.write(s + '\n')
+          print(f"dropped symbols: {len(dropped)}")
+          for s in dropped:
+              print(f"  DROPPED: {s}")
+          print(f"newly enabled by olddefconfig defaults: {len(newly)}")
+          for s in newly[:50]:
+              print(f"  NEW: {s}")
+          critical = ['CONFIG_DISPLAY_SAMSUNG', 'CONFIG_DRM_MSM',
+                      'CONFIG_WLAN', 'CONFIG_SECURITY_SELINUX_DEVELOP',
+                      'CONFIG_FS_ENCRYPTION', 'CONFIG_SECCOMP_FILTER',
+                      'CONFIG_FS_ENCRYPTION_INLINE_CRYPT',
+                      'CONFIG_ANDROID_BINDER_IPC', 'CONFIG_ASHMEM']
+          missing = [c for c in critical if c in dropped]
+          if missing:
+              print(f"::error::boot-critical symbols dropped by olddefconfig: {', '.join(missing)} — the driver is missing from the crDroid tree; see docs/kernel-defconfig-plan.md §6 item 2")
+              sys.exit(1)
+          print("OK: no boot-critical symbol dropped")
+          PY
+
+      - name: 'Gate 3 — build the kernel'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          make -j"$(nproc)" O=out ARCH=arm64 CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT="$PWD/tools/dtc" CONFIG_BUILD_ARM64_DT_OVERLAY=y \
+            2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          echo "OK: build finished"
+
+      - name: 'Gate 4 — Image.gz-dtb exists and fits the boot partition'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image.gz-dtb
+          test -f "$IMG" || { echo "::error::$IMG missing"; exit 1; }
+          SIZE=$(stat -c%s "$IMG")
+          echo "Image.gz-dtb size: $SIZE bytes"
+          # 64 MB boot partition (BOARD_BOOTIMAGE_PARTITION_SIZE);
+          # a real kernel image is several MB, never a few KB.
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "::error::Image.gz-dtb suspiciously small ($SIZE bytes)"
+            exit 1
+          fi
+          if [ "$SIZE" -ge 67108864 ]; then
+            echo "::error::Image.gz-dtb ($SIZE bytes) does not fit the 64 MB boot partition"
+            exit 1
+          fi
+          echo "OK: Image.gz-dtb fits the boot partition"
+          ls -l out/arch/arm64/boot/
+          df -h
+
+      - name: 'Gate 5 — kernel version string is 4.14.357-openela'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          VER=$(make -s O=out ARCH=arm64 kernelrelease)
+          echo "kernelrelease: $VER"
+          if [ "$VER" != "4.14.357-openela" ]; then
+            echo "::error::wrong kernel tree built: got '$VER', want '4.14.357-openela' (4.14.190/4.14.336 means the a71 tree, not crDroid)"
+            exit 1
+          fi
+          echo "OK: version string is 4.14.357-openela"
+
+      - name: 'Gate 6 — EROFS is in the built kernel (LZ4-only)'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          grep -q '^CONFIG_EROFS_FS=y$' out/.config || { echo "::error::CONFIG_EROFS_FS is not =y"; exit 1; }
+          grep -q '^CONFIG_EROFS_FS_ZIP=y$' out/.config || { echo "::error::CONFIG_EROFS_FS_ZIP is not =y"; exit 1; }
+          if grep -q '^CONFIG_EROFS_FS_ZIP_LZMA=y$' out/.config; then
+            echo "::error::CONFIG_EROFS_FS_ZIP_LZMA=y — the crDroid backport has no such symbol; something is wrong"
+            exit 1
+          fi
+          echo "OK: EROFS_FS + EROFS_FS_ZIP =y, LZMA absent (LZ4-only, as documented)"
+
+      - name: 'Gate 7 — SELinux permissive is possible'
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          grep -q '^CONFIG_SECURITY_SELINUX_DEVELOP=y$' out/.config || { echo "::error::CONFIG_SECURITY_SELINUX_DEVELOP is not =y — a permissive boot image cannot switch SELinux to permissive"; exit 1; }
+          echo "OK: SECURITY_SELINUX_DEVELOP=y (androidboot.selinux=permissive will work)"
+
+      - name: savedefconfig (canonical config for commit-back)
+        working-directory: kernel-src
+        run: |
+          set -euo pipefail
+          make O=out ARCH=arm64 savedefconfig
+          cp out/defconfig "$GITHUB_WORKSPACE/savedefconfig"
+          echo "== diff vs the draft defconfig (informational — review before committing back) =="
+          diff "$GITHUB_WORKSPACE/kernel/m51_defconfig" "$GITHUB_WORKSPACE/savedefconfig" | head -100 || true
+          echo "== line counts =="
+          wc -l "$GITHUB_WORKSPACE/kernel/m51_defconfig" "$GITHUB_WORKSPACE/savedefconfig"
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: m51-kernel-${{ github.run_number }}
+          path: |
+            kernel-src/out/arch/arm64/boot/Image.gz-dtb
+            kernel-src/out/arch/arm64/boot/Image.gz
+            kernel-src/out/.config
+            savedefconfig
+            dropped-symbols.txt
+            olddefconfig.log
+            build.log
+          if-no-files-found: error
+          retention-days: 14
