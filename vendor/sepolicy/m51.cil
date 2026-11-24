@@ -1,0 +1,34 @@
+# m51.cil — sepolicy bridge template for the HyperOS port (m51).
+#
+# Pattern from Arnav3078/ColorOS17-SM7150
+# device/samsung/m51/sepolicy/m51.cil (GPL-3.0, credited in
+# vendor/README.md). This is OUR template, written for the HyperOS
+# port — not a copy of that file.
+#
+# What it does: allow the binder calls the Xiaomi system_server needs
+# to reach the Samsung vendor HALs (fingerprint, sensors, audio,
+# allocator, composer), plus the data-file rules the fingerprint
+# daemon needs. Minimal on purpose — a bridge template, not a
+# finished policy.
+#
+# STATUS: TEMPLATE. Do NOT ship this as a finished policy. The real
+# policy is built in Phase 4 from live audit2allow denials collected
+# on the device (port-plan.md §3 Phase 4). Every rule here must be
+# justified by a real denial before it is kept; rules without a
+# denial get deleted.
+#
+# The offline compile check for a policy built from this template is
+# vendor/scripts/secilc_check.sh (Hyper371's method).
+
+# system_server -> vendor HALs: binder call + transfer.
+(allow system_server hal_fingerprint_default (binder (call transfer)))
+(allow system_server hal_sensors_default (binder (call transfer)))
+(allow system_server hal_audio_default (binder (call transfer)))
+(allow system_server hal_allocator_default (binder (call transfer)))
+(allow system_server hal_graphics_composer_default (binder (call transfer)))
+
+# Fingerprint daemon: read/write its own data files.
+# (The real paths come from the first live denial log — these are the
+# standard locations; delete any rule no denial ever justifies.)
+(allow hal_fingerprint_default fingerprintd_data_file (dir (search read write add_name remove_name)))
+(allow hal_fingerprint_default fingerprintd_data_file (file (create read write getattr unlink)))
