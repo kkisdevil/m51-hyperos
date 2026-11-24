@@ -1,0 +1,34 @@
+From: YuZora kernel porter <kartik@aoisora.codes>
+Subject: [PATCH] drm/msm/sde: fix undeclared 'mode' in _sde_rm_populate_requirements
+
+drivers/gpu/drm/msm/sde/sde_rm.c:1605:12: error: use of undeclared
+identifier 'mode' (Clang 13, kernel build run #3, 2026-11-24).
+
+_sde_rm_populate_requirements() takes struct drm_crtc_state
+*crtc_state and declares only `int i, num_lm;` — there is no
+variable named `mode` anywhere in scope (it is the only `mode->`
+use in the whole file). The display-mode width this debug trace
+wants to log is the requested mode on the CRTC state:
+crtc_state->mode.hdisplay (struct drm_crtc_state embeds the
+requested struct drm_display_mode as `mode`).
+
+This is a trace-only line (SDE_EVT32); the fix changes no
+behaviour. Same form as upstream CAF's sde_rm.c, which logs
+crtc_state->mode.hdisplay here.
+
+Applies to kkisdevil/android_kernel_samsung_sm7150 @ 4d83f24b
+(crDroid 4.14.357-openela). Applied porter-side by the
+build-kernel workflow (patches/kernel/*.patch) so the pinned
+kernel ref stays untouched.
+---
+--- a/drivers/gpu/drm/msm/sde/sde_rm.c
++++ b/drivers/gpu/drm/msm/sde/sde_rm.c
+@@ -1602,7 +1602,7 @@
+ 			reqs->topology->num_lm, reqs->topology->num_ctl,
+ 			reqs->topology->top_name,
+ 			reqs->topology->needs_split_display);
+-	SDE_EVT32(mode->hdisplay, rm->lm_max_width, reqs->topology->num_lm,
++	SDE_EVT32(crtc_state->mode.hdisplay, rm->lm_max_width, reqs->topology->num_lm,
+ 			reqs->top_ctrl, reqs->topology->top_name,
+ 			reqs->topology->num_ctl);
+ 
