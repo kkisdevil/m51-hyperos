@@ -1,0 +1,105 @@
+# Copyright (c) 2026 Kartik Deepak Sormare (kkisdevil) — m51-hyperos
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# test.yml — the workflow tester.
+#
+# On every push / pull request and on manual dispatch, it proves the
+# repo's scripts work without downloading anything:
+#   1. fetch-gsi.sh --help, --list and --dry-run for every known build
+#      (argument parsing + URL resolution only — no gigabytes downloaded).
+#   2. verify-device.sh --help, and verify-device.sh with no device
+#      attached (must fail cleanly with exit code 2, never a crash).
+#
+# This is NOT a build and NOT a flash. Nothing here touches a phone or
+# downloads firmware.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run-scripts:
+    name: Dry-run scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
+          shellcheck --version
+
+      - name: Shellcheck scripts
+        # Same exclusions upstream UN1CA uses in its CI (SC1090/SC1091:
+        # sourcing files whose paths are only known at runtime).
+        run: |
+          set -euo pipefail
+          shellcheck -e SC1090,SC1091 -s bash scripts/*.sh
+
+      - name: fetch-gsi.sh --help and --list
+        run: |
+          set -euo pipefail
+          bash scripts/fetch-gsi.sh --help
+          bash scripts/fetch-gsi.sh --list
+
+      - name: fetch-gsi.sh --dry-run for every known build
+        run: |
+          set -euo pipefail
+          for build in gold spring pudding; do
+            echo "== --dry-run --build $build =="
+            bash scripts/fetch-gsi.sh --dry-run --build "$build"
+          done
+          echo "== --dry-run with explicit file =="
+          bash scripts/fetch-gsi.sh --dry-run \
+            --file Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip
+
+      - name: fetch-gsi.sh rejects bad input
+        run: |
+          set -euo pipefail
+          if bash scripts/fetch-gsi.sh --build nope 2>/dev/null; then
+            echo "::error::--build nope should have failed"
+            exit 1
+          fi
+          echo "OK: unknown build rejected"
+          if bash scripts/fetch-gsi.sh --file not-a-gsi.txt --dry-run 2>/dev/null; then
+            echo "::error::--file not-a-gsi.txt should have failed"
+            exit 1
+          fi
+          echo "OK: non-archive --file rejected"
+
+      - name: verify-device.sh --help
+        run: |
+          set -euo pipefail
+          bash scripts/verify-device.sh --help
+
+      - name: verify-device.sh fails cleanly with no device attached
+        run: |
+          set -euo pipefail
+          # No phone is attached to a GitHub runner. The script must
+          # report that and exit 2 — not crash, not exit 0.
+          set +e
+          bash scripts/verify-device.sh > /tmp/verify-no-device.log 2>&1
+          CODE=$?
+          set -e
+          cat /tmp/verify-no-device.log
+          if [ "$CODE" -ne 2 ]; then
+            echo "::error::verify-device.sh with no device must exit 2, got $CODE"
+            exit 1
+          fi
+          echo "OK: no-device failure is clean (exit 2)"

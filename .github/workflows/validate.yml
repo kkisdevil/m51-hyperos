@@ -1,0 +1,162 @@
+# Copyright (c) 2026 Kartik Deepak Sormare (kkisdevil) — m51-hyperos
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# validate.yml — fast validation for this repo. Runs on every push/PR to
+# main and on manual dispatch. It downloads NO firmware, flashes nothing,
+# and builds NO ROM.
+#
+# What it checks:
+#   1. Shellcheck on this repo's own scripts (same exclusions upstream
+#      UN1CA uses in its CI: -e SC1090,SC1091).
+#   2. Every workflow YAML parses (python3 + PyYAML).
+#   3. Every docs link resolves: internal relative links must point at
+#      files that exist in the repo; external links must answer (HTTP
+#      2xx/3xx). 403/405/429 from a host are warnings, not failures —
+#      some hosts refuse automated checks while the link itself is fine.
+#      404/410 and DNS/connection errors fail the run.
+name: Validate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - '*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Syntax check all scripts
+        run: |
+          set -euo pipefail
+          for f in scripts/*.sh; do
+            bash -n "$f" && echo "OK bash -n: $f"
+          done
+
+      - name: Run shellcheck
+        run: |
+          set -euo pipefail
+          CODE=0
+          while IFS= read -r f; do
+            shellcheck -e SC1090,SC1091 -s bash "$f" || CODE=1
+          done < <(find scripts -name "*.sh")
+          exit $CODE
+
+  validate-workflows:
+    name: Validate workflow YAML
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Validate workflow YAML
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = []
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  with open(path) as f:
+                      data = yaml.safe_load(f)
+                  assert isinstance(data, dict) and 'jobs' in data, 'no jobs: block'
+                  print(f"OK yaml: {path}")
+              except Exception as e:
+                  print(f"BAD yaml: {path}: {e}")
+                  bad.append(path)
+          sys.exit(1 if bad else 0)
+          PY
+
+  check-links:
+    name: Check docs links
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Check internal and external links in Markdown
+        run: |
+          python3 - <<'PY'
+          import glob, os, re, sys, urllib.request, urllib.error
+
+          # One pattern for every URL form used in the docs: Markdown
+          # links [text](url), autolinks <url>, and bare URLs. The
+          # character class excludes the closers of all three forms
+          # (>, ), ]) so the match never swallows trailing punctuation.
+          URL_RE = re.compile(r'https?://[^\s<>"\')\]]+')
+          # Internal relative links only exist inside Markdown links:
+          # [text](docs/foo.md) or [text](foo.md#anchor).
+          MD_LINK_RE = re.compile(r'\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
+          # Anchors (#...) and mailto: are not files to check.
+          SKIP_PREFIXES = ('#', 'mailto:')
+          # Hosts that refuse automated checks get a warning, never a failure.
+          WARN_CODES = {403, 405, 429}
+
+          failures, warnings = [], []
+          checked_external = set()
+
+          def check_external(url):
+              if url in checked_external:
+                  return
+              checked_external.add(url)
+              req = urllib.request.Request(url, method='GET',
+                                           headers={'Range': 'bytes=0-0',
+                                                    'User-Agent': 'm51-hyperos-link-check/1.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      print(f"OK link: {url} (HTTP {r.status})")
+              except urllib.error.HTTPError as e:
+                  if e.code in WARN_CODES:
+                      print(f"WARN link: {url} (HTTP {e.code} — host refuses automated checks)")
+                      warnings.append(url)
+                  else:
+                      print(f"BAD link: {url} (HTTP {e.code})")
+                      failures.append(url)
+              except Exception as e:
+                  print(f"BAD link: {url} ({e})")
+                  failures.append(url)
+
+          for path in sorted(glob.glob('**/*.md', recursive=True)):
+              text = open(path, encoding='utf-8').read()
+              for url in URL_RE.findall(text):
+                  url = url.rstrip('.,;:')
+                  check_external(url)
+              for url in MD_LINK_RE.findall(text):
+                  if url.startswith(SKIP_PREFIXES):
+                      continue
+                  if url.startswith(('http://', 'https://')):
+                      continue  # already checked above as a URL
+                  # Internal link: relative to the file that contains it,
+                  # with any #anchor stripped.
+                  target = url.split('#', 1)[0]
+                  if not target:
+                      continue
+                  full = os.path.normpath(os.path.join(os.path.dirname(path), target))
+                  if os.path.exists(full):
+                      print(f"OK link: {path} -> {target}")
+                  else:
+                      print(f"BAD link: {path} -> {target} (no such file)")
+                      failures.append(f"{path} -> {target}")
+
+          print(f"links checked: {len(checked_external)} external, "
+                f"{len(failures)} failures, {len(warnings)} warnings")
+          sys.exit(1 if failures else 0)
+          PY
