@@ -26,8 +26,18 @@ error: use of undeclared identifier 'mode'` (Clang 13). Gates 1
 `patches/kernel/0001-drm-msm-sde-fix-undeclared-mode.patch`
 (`mode->hdisplay` → `crtc_state->mode.hdisplay`, trace-only line),
 applied by the workflow before Gate 1; `apt-get update` also
-hardened with a 3-attempt retry (fix below, §2 + §5). No kernel
-has been built yet — run #4 is dispatched on the fix.**
+hardened with a 3-attempt retry (fix below, §2 + §5). Run #4
+FAILED 2026-11-24 13:08 IST (run 45347722962, 14m 23s) — Gate 3,
+vmlinux link: undefined `npu_debugfs_init` / `npu_debugfs_deinit`
+and undefined `__qdf_bug`. Gates 1 + 2 passed. The fixes:
+porter-side patches `patches/kernel/0002-msm-npu-fix-debugfs-
+obj-overwrite.patch` (the NPU Makefile's two `:=` lines on obj-y
+overwrite each other — `:=` → `+=`) and `patches/kernel/0003-
+qdf-define-qdf-bug-without-wlan-debug.patch` (`__qdf_bug`
+re-defined outside the `WLAN_DEBUG` guard, under the header's
+exact extern-branch condition + `!WLAN_DEBUG`), applied by the
+workflow before Gate 1 (fix below, §5). No kernel has been built
+yet — run #5 is dispatched on the fix.**
 
 ## 1. Toolchain pin — proton-clang
 
@@ -210,6 +220,8 @@ Two deliberate quirks the gates already account for:
 | `unknown type [0x13] section '.relr.dyn'` from `toolchain/proton-clang/bin/ld` while building `scripts/basic/fixdep`, Gate 1 dies in seconds | proton-clang's bundled `ld` (2021) predates the RELR section type and cannot read Ubuntu 24.04 glibc. The workflow had prepended proton's `bin/` to PATH, so the host gcc's collect2 picked up proton's `ld` instead of the system one. NOT a defconfig/Kconfig error — the build died before any config processing | NEVER put the toolchain's `bin/` on PATH. Call clang + the cross tools by absolute path (`CC="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/clang"`, `CROSS_COMPILE="$GITHUB_WORKSPACE/toolchain/proton-clang/bin/aarch64-linux-gnu-"`) and assert `command -v ld` is `/usr/bin/ld` before any make runs. Fixed 2026-11-24 (run #2 → run #3). |
 | `make[1]: ../scripts/clang-android.sh: No such file or directory` at Gate 1 (warning only) | The crDroid tree has no `scripts/clang-android.sh` (an AOSP helper the kernel Makefile references) | Non-fatal — make continues past it. Do not chase it unless a later step fails on a missing clang wrapper flag. Noted 2026-11-24 (run #2 log). |
 | `error: use of undeclared identifier 'mode'` in `drivers/gpu/drm/msm/sde/sde_rm.c:1605` at Gate 3 (Clang 13) | `_sde_rm_populate_requirements()` takes `crtc_state` and declares only `int i, num_lm;` — there is no variable named `mode` in scope (the only `mode->` use in the file). A stale trace line from the Samsung/CAF tree that GCC tolerated or never compiled this way | Porter-side patch `patches/kernel/0001-drm-msm-sde-fix-undeclared-mode.patch`: `mode->hdisplay` → `crtc_state->mode.hdisplay` (trace-only `SDE_EVT32` line, no behaviour change; same form as upstream CAF). Applied by the workflow ("Apply porter kernel patches") before Gate 1; the pinned kernel ref stays untouched. Fixed 2026-11-24 (run #3 → run #4). |
+| `undefined reference to 'npu_debugfs_init'` (npu_dev.c:2231) / `'npu_debugfs_deinit'` (npu_dev.c:2290) at the vmlinux link, Gate 3 | The NPU Makefile uses `:=` on obj-y twice (`obj-$(CONFIG_DEBUG_FS) := npu_debugfs.o`, then `obj-$(CONFIG_MSM_NPU) := msm_npu.o`); with both configs `=y` the second assignment overwrites the first, so `npu_debugfs.o` is never compiled — verified in the run #4 log (no `CC ... npu_debugfs.o` line; all five `msm_npu-objs` members compiled, log lines 3230-3245). The calls exist because npu_dev.c / npu_common.h guard them on `CONFIG_DEBUG_FS` (=y) | Porter-side patch `patches/kernel/0002-msm-npu-fix-debugfs-obj-overwrite.patch`: `:=` → `+=` on both lines, so both objects land in obj-y. Fixed 2026-11-24 (run #4 → run #5). |
+| `undefined reference to '__qdf_bug'` (qdf_lock.h:352, cdp_txrx_ctrl.h:237, cdp_txrx_cmn.h:811) at the vmlinux link, Gate 3 | `__qdf_bug()` is defined only in `qdf/linux/src/qdf_trace.c`, whose whole body is wrapped in `#ifdef WLAN_DEBUG` (lines 25-3993, commit d77419c) — and `WLAN_DEBUG` is only -D'd when `BUILD_DEBUG_VERSION=y` (qcacld `configs/default_defconfig`: `BUILD_DEBUG_VERSION := n`). But `PANIC_ON_BUG=y` (because `CONFIG_SLUB_DEBUG=y` in our defconfig → qcacld default_defconfig lines 514-521), so `i_qdf_trace.h` takes the extern-declaration branch and `QDF_BUG()` emits calls to a symbol that compiles to nothing. Verified: `qdf_trace.o` WAS compiled in run #4 (log line 4690) yet provides no `__qdf_bug` | Porter-side patch `patches/kernel/0003-qdf-define-qdf-bug-without-wlan-debug.patch`: define `__qdf_bug()` after the closing `#endif /* WLAN_DEBUG */`, guarded by the header's exact extern-branch condition (`PANIC_ON_BUG` + `CONFIG_SLUB_DEBUG`) plus `!WLAN_DEBUG`, so it cannot duplicate the original definition in a debug build. Same body (`BUG();` + `qdf_export_symbol`). Fixed 2026-11-24 (run #4 → run #5). |
 | `clang: error while loading shared libraries: libtinfo.so.5` at the version step | `libtinfo5` not installed (the pool fetch failed silently, or the step was skipped) | Check the install step's log for the pool fetch; if the pool listing is unreachable, switch `runs-on` to `ubuntu-22.04` (jammy has `libtinfo5` natively) |
 | `No space left on device` mid-build | Runner disk (~14 GB) exhausted by source + toolchain + output | Extend the free-disk step (drop more preinstalled dirs); check the `df -h` lines in the log for the real usage |
 | `make m51_defconfig` fails | Kconfig syntax error in the draft, or the copy step's hash check caught a drifted file | Read the error; fix the draft, re-upload, re-run |
