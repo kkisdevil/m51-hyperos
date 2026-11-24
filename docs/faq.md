@@ -20,8 +20,9 @@ everything as unproven until someone tests it in the open.
 ## Why HyperOS 2 first and not HyperOS 3?
 
 The m51's vendor is frozen at Android 12 (VNDK 31, kernel 4.14).
-HyperOS 2 is an Android 15 system; HyperOS 3 is Android 16. The smaller
-the system↔vendor version gap, the fewer HAL surprises. The S21+
+HyperOS 2 is an Android 15 system; HyperOS 3 ships on Android 15 (e.g.
+the Mystic `gold` build) as well as Android 16. The smaller the
+system↔vendor version gap, the fewer HAL surprises. The S21+
 HyperOS 3 boot explicitly needed an A16 vendor — the m51 has no newer
 vendor to upgrade to. HyperOS 1 (Android 14) has the smallest gap of
 all and is the safest fallback if HyperOS 2 fails.
