@@ -1,0 +1,3 @@
+Number of camera devices: 4
+  Device 0: facing=BACK orientation=90
+  Device 1: facing=FRONT orientation=270

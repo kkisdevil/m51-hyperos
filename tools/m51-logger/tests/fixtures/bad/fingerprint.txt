@@ -1,0 +1,2 @@
+Fingerprint service:
+  enrolled fingers: 2

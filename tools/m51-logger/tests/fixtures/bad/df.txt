@@ -1,0 +1,2 @@
+Filesystem     1K-blocks    Used Available Use% Mounted on
+/dev/block/dm-0  12345678 9000000   3345678  73% /

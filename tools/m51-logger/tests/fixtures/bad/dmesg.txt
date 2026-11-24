@@ -1,0 +1,5 @@
+[    0.000000] Linux version 4.14.357-openela
+[  123.456789] lowmemorykiller: Killing 'com.example.app' (1234), adj 900
+[  124.000000] audit: type=1400 audit(123456.789:12): avc: denied { read } for pid=567 comm="cameraserver" name="camera" dev="tmpfs" ino=123 scontext=u:r:cameraserver:s0 tcontext=u:object_r:camera_device:s0 tclass=chr_file permissive=0
+[  125.000000] audit: type=1400 audit(123456.790:13): avc: denied { ioctl } for pid=568 comm="hal" scontext=u:r:hal_camera:s0 tcontext=u:object_r:camera_device:s0 tclass=chr_file permissive=0
+[  200.000000] CAMX: camxhal: error: failed to open camera 0
