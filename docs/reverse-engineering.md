@@ -113,8 +113,11 @@ demonstrably booted Android 14, 15 and (with patches) 16. What is missing:
    are from April 2025. Only the A71 side lives on in LineageOS/crDroid.
 2. **Any HyperOS-specific tree: none exists.** A HyperOS port needs a
    new/adapted device tree, not a rebrand — HyperOS 2 maps to Android 15
-   (matches the frozen `lineage-22.2` branch), HyperOS 3 to Android 16 (needs
-   the `lineage-23.0` branch plus the unpublished local patches from the
+   (matches the frozen `lineage-22.2` branch); HyperOS 3 ships on Android
+   15 as well as Android 16 (e.g. Mystic `gold` is HyperOS 3.0.1.0 on
+   Android 15) — the vendor-compat fact that matters is the Android base,
+   not the HyperOS number. HyperOS 3 on Android 16 needs the
+   `lineage-23.0` branch plus the unpublished local patches from the
    LOS 23 builder, or a forward-port from live LOS a71 `lineage-23.x`).
 3. **Kernel ceiling: 4.14 forever** (336 in LOS, 357-openela in crDroid —
    the freshest option). Workable for HyperOS 2/3 ports, but no upstream
@@ -128,7 +131,7 @@ demonstrably booted Android 14, 15 and (with patches) 16. What is missing:
 
 **Recommended base:** fork `a71-devs/android_device_samsung_m51` +
 `a71-common` + vendor at `lineage-22.2` (HyperOS 2 / Android 15) or
-`lineage-23.0` (HyperOS 3 / Android 16), swap in
+`lineage-23.0` (HyperOS 3 on Android 16), swap in
 `crdroidandroid/android_kernel_samsung_sm7150` (4.14.357-openela, actively
 maintained) and cross-check against the live LineageOS a71 `lineage-23.x`
 trees — and treat the m51 repos as an unmaintained snapshot to be taken
@@ -168,10 +171,13 @@ API 35. What it demands is a vendor inside Google's FCM support span.
   support for old vendors. So "VNDK 31 vs 35" is the wrong frame for
   HyperOS 2/3: the question is **HIDL vs AIDL HALs + FCM span**, not a VNDK
   number.
-- **HyperOS 2 = Android 15, SDK 35, FCM 202404.** HyperOS 3 = Android 16,
-  SDK 36, FCM 202504 (MysticGSI Telegram listings show HyperOS 3 builds e.g.
-  `OS3.0.9.0.WODCNXM`, build ID `BP2A.250605.031.A3`, `missi-user`, from
-  Xiaomi 15S Pro / Xiaomi 17).
+- **HyperOS 2 = Android 15, SDK 35, FCM 202404.** HyperOS 3 ships on
+  Android 15 too (SDK 35, FCM 202404 — e.g. Mystic `gold`,
+  `OS3.0.1.0.VNQCNXM`) and on Android 16 (SDK 36, FCM 202504, e.g.
+  `OS3.0.9.0.WODCNXM`). The HyperOS number and the Android base are
+  independent; the vendor-compat conclusions in this doc rest on the
+  Android base, not the HyperOS number (see
+  [gsi-verification.md](gsi-verification.md) §2).
 - **HIDL deprecated since Android 13**, frozen not gone (~726 `.hal` files
   still in the Android 17 tree; `libhidl`/`hwservicemanager` survive as a
   compat shim). Android 15's own HAL set is ~100% AIDL for new devices
@@ -240,7 +246,9 @@ neverallow conflicts — a bring-up project in itself, not a patch.
 ## 3. Gap table — interface × HyperOS requirement × m51 vendor reality
 
 Verdicts: **works** / **needs bridge** / **needs replacement** / **unknown**.
-"H2" = HyperOS 2 (Android 15), "H3" = HyperOS 3 (Android 16). m51 baseline:
+"H2" = HyperOS 2 (Android 15), "H3" = HyperOS 3 (Android 16). A HyperOS 3
+build on Android 15 (Mystic `gold`) follows the H2 column's Android-15
+vendor contract, not H3. m51 baseline:
 SM-M515F, SM7150/SD730G, Adreno 618, launched Android 10, last stock Android
 12/One UI 4.1, kernel `4.14.190`, vendor base Android 11, A-only + dynamic
 partitions, 6.7" 1080×2400 60 Hz Super AMOLED Plus, side capacitive
@@ -313,11 +321,13 @@ tree (shared with m51) and are marked **inferred — verify on-device**
   frozen/optional FCM, and kernel backports that do not exist for SM7150 —
   with no TrebleDroid release since June 2025 to build on.
 - **First concrete step if pursued:** pick a **Qualcomm-source** Mystic
-  HyperOS 2 GSI (never a MediaTek-source one — that is what forces the MTK
-  RIL/ATMs shims), flash it over the latest m51 stock vendor with a
-  permissive boot image, and triage first-failure logcat exactly as the A03
-  project did (lights NPE → RIL → SIM power-state → camera ATMs → account
-  MTD), with an m51 RRO overlay built from the A54 template.
+  HyperOS 2 GSI (`spring` — never a MediaTek-source one, e.g. Mystic
+  `gold`, HyperOS 3.0.1.0 on Android 15 from a Dimensity 6080 device;
+  that is what forces the MTK RIL/ATMs shims), flash it over the latest
+  m51 stock vendor with a permissive boot image, and triage first-failure
+  logcat exactly as the A03 project did (lights NPE → RIL → SIM
+  power-state → camera ATMs → account MTD), with an m51 RRO overlay built
+  from the A54 template.
 
 ## 6. Sources
 
