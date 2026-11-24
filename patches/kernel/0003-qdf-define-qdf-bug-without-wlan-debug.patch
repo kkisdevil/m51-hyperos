@@ -1,0 +1,58 @@
+From: YuZora kernel porter <kartik@aoisora.codes>
+Subject: [PATCH] qcacmn: define __qdf_bug() when WLAN_DEBUG is off
+
+drivers/staging/qcacld-3.0/core/hdd/src/wlan_hdd_assoc.o:
+undefined reference to `__qdf_bug' (from qdf_lock.h:352,
+cdp_txrx_ctrl.h:237, cdp_txrx_cmn.h:811) at the vmlinux link,
+kernel build run #4, 2026-11-24, Gate 3.
+
+Root cause: __qdf_bug() is defined only in
+drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c, whose
+whole body is wrapped in `#ifdef WLAN_DEBUG` (lines 25-3993,
+added by commit d77419c, "qcacmn: Disable all of qdf_trace when
+WLAN_DEBUG is disabled"). WLAN_DEBUG is only -D'd when
+BUILD_DEBUG_VERSION=y (drivers/staging/qcacld-3.0/configs/
+default_defconfig: BUILD_DEBUG_VERSION := n, the default). But
+PANIC_ON_BUG=y, because CONFIG_SLUB_DEBUG=y (defconfig line 285
+-> qcacld default_defconfig lines 514-521), so
+i_qdf_trace.h takes the extern-declaration branch and QDF_BUG()
+emits calls to __qdf_bug() — while the definition compiles to
+nothing. The run #4 log proves it: qdf_trace.o WAS compiled (log
+line 4690) yet provides no __qdf_bug.
+
+Fix: define __qdf_bug() after the closing `#endif /* WLAN_DEBUG
+*/`, guarded by exactly the same condition as the header's extern
+branch (PANIC_ON_BUG + CONFIG_SLUB_DEBUG) plus !WLAN_DEBUG, so it
+cannot duplicate the original definition when WLAN_DEBUG is on.
+Same body as the original (BUG(); + qdf_export_symbol). No
+behaviour change in a debug build; a non-debug build with
+PANIC_ON_BUG now links instead of failing.
+
+Applies to kkisdevil/android_kernel_samsung_sm7150 @ 4d83f24b
+(crDroid 4.14.357-openela). Applied porter-side by the
+build-kernel workflow (patches/kernel/*.patch) so the pinned
+kernel ref stays untouched.
+---
+--- a/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
++++ b/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
+@@ -3991,3 +3991,20 @@
+ #endif /* CONFIG_SLUB_DEBUG */
+ #endif /* PANIC_ON_BUG */
+ #endif /* WLAN_DEBUG */
++
++/*
++ * __qdf_bug() must be defined whenever QDF_BUG() can emit a call to
++ * it (i_qdf_trace.h takes the extern declaration when PANIC_ON_BUG
++ * and CONFIG_SLUB_DEBUG are both set), even when WLAN_DEBUG is off
++ * and the rest of this file is compiled out (BUILD_DEBUG_VERSION=n,
++ * the default). Without this, vmlinux fails to link with undefined
++ * reference to `__qdf_bug'. The !WLAN_DEBUG guard keeps this from
++ * duplicating the definition above when WLAN_DEBUG is on.
++ */
++#if defined(PANIC_ON_BUG) && defined(CONFIG_SLUB_DEBUG) && !defined(WLAN_DEBUG)
++void __qdf_bug(void)
++{
++	BUG();
++}
++qdf_export_symbol(__qdf_bug);
++#endif
