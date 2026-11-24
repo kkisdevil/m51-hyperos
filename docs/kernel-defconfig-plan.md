@@ -451,12 +451,99 @@ In order; each is a gate, not a nicety:
 
 ## 7. Open items / dropped symbols (filled in by the first build)
 
-- [ ] `olddefconfig` unknown-symbol list — none recorded yet (no
-  build has run).
-- [ ] GSI compression check — verify the Mystic `spring` HyperOS 2 image
-  is LZ4-compressed EROFS (or ext4); if it is lzma EROFS, this
-  kernel cannot mount it (§3.3).
-- [ ] Toolchain pin — **RESOLVED 2026-11-24** (docs/kernel-build.md
+- [x] `olddefconfig` unknown-symbol list — **RECORDED 2026-11-24
+  from run #8** (run 45372379403, artifact `m51-kernel-8`,
+  `dropped-symbols.txt`, 32 symbols). None is boot-critical
+  (no `DISPLAY_SAMSUNG`, `DRM_MSM`, `WLAN`,
+  `SECURITY_SELINUX_DEVELOP`, `FS_ENCRYPTION`, `SECCOMP_FILTER`,
+  `FS_ENCRYPTION_INLINE_CRYPT`, `ANDROID_BINDER_IPC`, `ASHMEM`),
+  so the build continued and all 7 gates passed. The 32 dropped
+  symbols, verbatim:
+
+  ```
+  CONFIG_ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
+  CONFIG_DEFAULT_SECURITY
+  CONFIG_F2FS_FS_LZ4HC
+  CONFIG_F2FS_FS_LZORLE
+  CONFIG_F2FS_SEC_BLOCK_OPERATIONS_DEBUG
+  CONFIG_F2FS_SEC_DEBUG_NODE
+  CONFIG_F2FS_SEC_SUPPORT_DNODE_RELOCATION
+  CONFIG_F2FS_STRICT_BUG_ON
+  CONFIG_FSCRYPT_SDP
+  CONFIG_KPERFMON
+  CONFIG_LFR_SUBNET_DETECTION
+  CONFIG_MCC_TO_SCC_SWITCH
+  CONFIG_MPC_UT_FRAMEWORK
+  CONFIG_MSM_NPU_V2
+  CONFIG_QCACLD_FEATURE_GREEN_AP
+  CONFIG_QCACLD_FEATURE_NAN
+  CONFIG_QCACLD_WLAN_LFR2
+  CONFIG_QCACLD_WLAN_LFR3
+  CONFIG_QCOM_LTE_COEX
+  CONFIG_QCOM_TDLS
+  CONFIG_QCOM_VOWIFI_11R
+  CONFIG_SECURITY_PERF_EVENTS_RESTRICT
+  CONFIG_SPECULATIVE_PAGE_FAULT
+  CONFIG_THIN_ARCHIVES
+  CONFIG_WLAN_FASTPATH
+  CONFIG_WLAN_FEATURE_11W
+  CONFIG_WLAN_FEATURE_DISA
+  CONFIG_WLAN_FEATURE_LPSS
+  CONFIG_WLAN_NAPI
+  CONFIG_WLAN_OFFLOAD_PACKETS
+  CONFIG_WLAN_SYNC_TSF
+  CONFIG_WLAN_TX_FLOW_CONTROL_V2
+  ```
+
+  What they are: mostly qcacld WLAN feature flags the crDroid
+  tree never had (`QCACLD_FEATURE_*`, `WLAN_FEATURE_*`,
+  `WLAN_FASTPATH`, `WLAN_NAPI`, `WLAN_OFFLOAD_PACKETS`,
+  `WLAN_SYNC_TSF`, `WLAN_TX_FLOW_CONTROL_V2`, `QCOM_LTE_COEX`,
+  `QCOM_TDLS`, `QCOM_VOWIFI_11R`, `LFR_SUBNET_DETECTION`,
+  `MCC_TO_SCC_SWITCH`, `QCOM_*`), Samsung F2FS extras
+  (`F2FS_FS_LZ4HC`, `F2FS_FS_LZORLE`, `F2FS_SEC_*`,
+  `F2FS_STRICT_BUG_ON`, `FSCRYPT_SDP`), Samsung
+  debug/diagnostic symbols (`KPERFMON`, `MPC_UT_FRAMEWORK`,
+  `SECURITY_PERF_EVENTS_RESTRICT`,
+  `ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT` /
+  `SPECULATIVE_PAGE_FAULT`, `DEFAULT_SECURITY`,
+  `THIN_ARCHIVES`). Dropping them is acceptable per plan §6
+  item 2 (Samsung debug/diagnostic symbols the crDroid tree
+  never had) — the WLAN driver itself (`WLAN`) survived, and
+  the kernel built and linked.
+- [x] `CONFIG_MSM_NPU_V2` — dropped because **that symbol does
+  not exist in the crDroid tree** (it was one of the 9 appends in
+  the merged draft defconfig). The NPU is covered by
+  `CONFIG_MSM_NPU=y`, which IS in the committed savedefconfig,
+  and the NPU objects compiled (patch 0002). Committing the
+  savedefconfig automatically drops `MSM_NPU_V2`; no manual edit
+  was needed, and the defconfig-plan §3.2 append list should be
+  read as "MSM_NPU_V2 (dropped — symbol does not exist in this
+  tree)" from now on.
+- [x] `savedefconfig` commit-back — **DONE 2026-11-24.**
+  `kernel/m51_defconfig` is now the reviewed savedefconfig from
+  run #8 (SHA-256
+  `94b251e29d5f3b39205e3e5868010e51b84015400453b9c1c17fa1a6c85d22c5`,
+  23,551 B, 909 CONFIG lines), replacing the 181,825 B draft.
+  Spot-checked in it: `OVERLAY_FS`, `INCREMENTAL_FS`,
+  `BLK_INLINE_ENCRYPTION_FALLBACK`, `IKHEADERS`, `EROFS_FS`,
+  `EROFS_FS_PCPU_KTHREAD`, `MSM_NPU`, `DISPLAY_SAMSUNG`,
+  `ANDROID_BINDER_IPC`, `ASHMEM`, `F2FS_FS_ENCRYPTION`,
+  `FS_ENCRYPTION_INLINE_CRYPT` all `=y`. Absent from it
+  (`EROFS_FS_ZIP`, `SECURITY_SELINUX_DEVELOP`, `SECCOMP_FILTER`,
+  `DRM_MSM`, `WLAN`, `FS_ENCRYPTION`) is expected:
+  `savedefconfig` omits symbols at their default value; the
+  runner's Gate 6/7 checks verified them `=y` in `.config` and
+  passed. `Image.gz-dtb` from the same build: **19,725,654
+  bytes** — fits the 64 MB boot partition (Gate 4).
+- [x] `DISPLAY_SAMSUNG` / `DRM_MSM` / `WLAN` existence in the
+  crDroid Kconfig tree — **RESOLVED 2026-11-24 (run #8).** None
+  of the three was dropped by `olddefconfig`, so all three
+  symbols exist in the crDroid tree; `DISPLAY_SAMSUNG=y` is in
+  the committed savedefconfig, and the kernel built and linked
+  with the MSM display driver (`sde_rm.c` compiled under patch
+  0001).
+- [x] Toolchain pin — **RESOLVED 2026-11-24** (docs/kernel-build.md
   §1 + `.github/workflows/build-kernel.yml`): proton-clang
   `kdrag0n/proton-clang` @ `9fb011b1` (frozen master HEAD,
   2021-05-22, Clang 13.0.0), full-Clang build (`CC=clang`,
@@ -465,11 +552,9 @@ In order; each is a gate, not a nicety:
   Ubuntu-18.04-built binaries. Fallback if proton-clang fails:
   AOSP Clang r383902 + GCC 4.9 (archive URLs unverified — verify
   before wiring in).
-- [ ] `DISPLAY_SAMSUNG` / `DRM_MSM` / `WLAN` existence in the
-  crDroid Kconfig tree — unproven until the first `olddefconfig`
-  (§6 item 2). The `m51.config` fragment proves the panel/sensor
-  symbols exist; it does not prove the display-driver top-level
-  symbols do.
+- [ ] GSI compression check — verify the Mystic `spring` HyperOS 2 image
+  is LZ4-compressed EROFS (or ext4); if it is lzma EROFS, this
+  kernel cannot mount it (§3.3).
 
 ## 8. Sources
 
