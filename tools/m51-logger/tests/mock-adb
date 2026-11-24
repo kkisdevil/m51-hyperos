@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Mock `adb` for the m51-logger dry-run tests. NOT a real ADB client.
+# Reads canned output from $MOCK_FIXTURES (default: tests/fixtures/bad).
+# Supports only what collect-logs.sh uses: `devices`, `shell <cmd>`,
+# `connect <host:port>`. Unknown commands print nothing and exit 0.
+set -u
+FIX="${MOCK_FIXTURES:-$(dirname "$0")/fixtures/bad}"
+
+if [ "${1:-}" = "devices" ]; then
+    printf 'List of devices attached\nM515F123456\tdevice\n'
+    exit 0
+fi
+if [ "${1:-}" = "connect" ]; then
+    printf 'connected to %s\n' "${2:-}"
+    exit 0
+fi
+if [ "${1:-}" = "shell" ]; then
+    shift
+    # Drop a leading "-s <serial>" if present.
+    if [ "${1:-}" = "-s" ]; then shift 2; fi
+    cmd="$*"
+    case "$cmd" in
+        *getprop*)            cat "$FIX/getprop.txt" ;;
+        *uname*)              cat "$FIX/uname.txt" ;;
+        *"/proc/version"*)    cat "$FIX/version.txt" ;;
+        *uptime*)             cat "$FIX/uptime.txt" ;;
+        *dmesg*)              cat "$FIX/dmesg.txt" ;;
+        *thermal_zone\*/temp) cat "$FIX/thermal.txt" ;;
+        *thermal_zone\*/type) cat "$FIX/thermal-types.txt" ;;
+        *"/proc/meminfo"*)    cat "$FIX/meminfo.txt" ;;
+        *swappiness*)         cat "$FIX/swappiness.txt" ;;
+        *zram0/disksize*)     cat "$FIX/zram-disksize.txt" ;;
+        *zram0/mem_used*)     cat "$FIX/zram-used.txt" ;;
+        *zram0/orig_data*)    printf '98765432\n' ;;
+        *zram0/comp_algorithm*) printf 'lz4\n' ;;
+        *SurfaceFlinger*)     cat "$FIX/surfaceflinger.txt" ;;
+        *logcat*)             cat "$FIX/logcat.txt" ;;
+        *ps\ -A*)             cat "$FIX/ps.txt" ;;
+        *dumpsys\ battery*)   cat "$FIX/battery.txt" ;;
+        *df\ -h*)             cat "$FIX/df.txt" ;;
+        *mount*)              cat "$FIX/mount.txt" ;;
+        *media.camera*)       cat "$FIX/camera.txt" ;;
+        *dumpsys\ fingerprint*) cat "$FIX/fingerprint.txt" ;;
+        *getenforce*)         cat "$FIX/getenforce.txt" ;;
+        *su\ -c\ id*)         printf 'uid=0(root) gid=0(root)\n' ;;
+        *gpuclk*)             printf '650000000\n' ;;
+        *gpubusy*)            printf '45 100\n' ;;
+        *battery/temp*)       printf '380\n' ;;
+        *actual_brightness*)  printf '8000\n' ;;
+        *bl_power*)           printf '0\n' ;;
+        *scaling_cur_freq*)   printf '1708800\n1708800\n' ;;
+        *scaling_governor*)   printf 'schedutil\nschedutil\n' ;;
+        *scaling_max_freq*)   printf '2208000\n2208000\n' ;;
+        *pressure*)           printf 'some avg10=0.00 avg60=0.00 avg300=0.00 total=0\n' ;;
+        *vmstat*)             printf 'oom_kill 0\npswpin 0\npswpout 0\npgfree 123456\n' ;;
+        *fingerprint*)        cat "$FIX/fingerprint.txt" ;;
+        *settings*)           printf 'unica_test=1\n' ;;
+        *date*)               printf 'Wed Nov 25 01:00:00 IST 2026\n' ;;
+        *bootreason*|*sys.boot.reason*) printf 'reboot\n' ;;
+        *"/proc/cmdline"*)    printf 'androidboot.selinux=permissive buildvariant=userdebug\n' ;;
+        *)                    printf '' ;;
+    esac
+    exit 0
+fi
+printf 'mock-adb: unsupported invocation: %s\n' "$*" >&2
+exit 0
