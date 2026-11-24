@@ -41,7 +41,7 @@ and a failure in one layer is debugged in that layer only.
 │     Files: port/bridges/  (TrebleDroid + a71-common pieces)     │
 ├─────────────────────────────────────────────────────────────────┤
 │ L3  System image (base)                                         │
-│     Qualcomm-source Mystic HyperOS 2 GSI (gold, Android 15)     │
+│     Qualcomm-source Mystic HyperOS 2 GSI (spring, Android 15)    │
 │     Files: fetched by scripts/fetch-gsi.sh (never committed)    │
 ├─────────────────────────────────────────────────────────────────┤
 │ L2  Device tree + vendor (Samsung side, taken over)             │
@@ -86,8 +86,8 @@ Design rules (from the reverse-engineering):
 
 | Choice | Decision | Reason |
 |---|---|---|
-| Target HyperOS | **HyperOS 2 (Android 15)**, Mystic `gold` build | FCM 6 is inside Android 15's support span; smallest system↔vendor gap; A71 precedent is HyperOS 2 |
-| GSI source | **Qualcomm-source Mystic GSI** (`gold`, OS2.x) | Avoids MTK telephony/camera jars |
+| Target HyperOS | **HyperOS 2 (Android 15)**, Mystic `spring` build | FCM 6 is inside Android 15's support span; smallest system↔vendor gap; A71 precedent is HyperOS 2 |
+| GSI source | **Qualcomm-source Mystic GSI** (`spring`, OS2.0.204.0) | Avoids MTK telephony/camera jars |
 | Device tree base | Fork `a71-devs/android_device_samsung_m51` + `a71-common` @ `lineage-22.2` | Matches HyperOS 2 / Android 15; the frozen branch the trees were left on |
 | Kernel base | `crdroidandroid/android_kernel_samsung_sm7150`, **4.14.357-openela** | Only actively maintained SM7150 kernel (pushed 2026-11-22); newer than LOS 4.14.336 |
 | Vendor blobs | Re-extract from stock **M515FXXU6DXJ2** (latest) via the trees' `extract-files.py` | a71-devs blobs are Android 12-era and 16 months stale; no TheMuppets m51 mirror exists |
@@ -135,8 +135,8 @@ download). No build attempted yet.
 
 ### Phase 1 — HyperOS 2 boots to home screen (needs a real m51)
 
-- Pick the Qualcomm-source Mystic HyperOS 2 GSI (`gold`); verify source
-  device is Snapdragon.
+- Pick the Qualcomm-source Mystic HyperOS 2 GSI (`spring`); verify source
+  device is Snapdragon (6s Gen 3).
 - Build the system image: GSI + m51 RRO overlay (from the A54 template:
   status-bar height, hole-punch, rounded corners, 60 Hz refresh, power
   profile, brightness values imported from stock framework-res) +
