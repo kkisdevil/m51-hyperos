@@ -813,9 +813,20 @@ whole modem stack).
   optional hardening.**
 - [x] JRE install — OpenJDK 25.0.5.1 installed; baksmali 2.5.2 verified
   working on all four jars.
-- [ ] Decide 5.2a (fork hardware/samsung) vs 5.2b (`/dev/null` override)
-  with the user — (a) is recommended. The no-op light is now the
-  primary fix, not a nice-to-have.
+- [x] Decide 5.2a (fork hardware/samsung) vs 5.2b (`/dev/null` override)
+  with the user — **DECIDED 2026-11-24 ~20:47 IST: user chose (a) fork.**
+  Files prepared, awaiting upload to the fork: `lights-fork/Lights.cpp`
+  + `Lights.h` (modified, syntax-checked) with `.orig` pristine copies
+  of the lineage-22.2 sources; `trees/manifest.json` entry added
+  (fork_point `0365e8bd`). **Trap found while preparing:** §6.1's
+  primary wording ("inside the `#ifdef LED_BLINK_NODE` block's
+  registration") would have put the registration inside a guard the
+  a71-common override header never defines — dead code, proven by
+  preprocessing the pristine file (0 NOTIFICATIONS emplaces in the
+  m51 config). The handler, registration, and declaration are all
+  UNCONDITIONAL, next to the BACKLIGHT code; the ambiguity is stated
+  in the `Lights.cpp` fork note. The no-op light is now the primary
+  fix, not a nice-to-have.
 - [ ] `panel0-backlight` sysfs existence on the m51 kernel: the
   a71-common override header is authoritative for LineageOS on this
   device family; confirm on the first boot (`ls
