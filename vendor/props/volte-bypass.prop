@@ -1,0 +1,20 @@
+# volte-bypass.prop — VoLTE bypass (FALLBACK ONLY, m51 HyperOS port).
+#
+# Pattern from Arnav3078/ColorOS17-SM7150 tweaks.prop §6 (GPL-3.0,
+# credited in vendor/README.md): disable the IMS retry loops so the
+# modem daemon stops crash-looping and calls stay on 3G/CSFB.
+#
+# THIS IS THE FALLBACK, NOT THE GOAL. It gives up VoLTE entirely.
+# The goal is phh Floss IMS per Indian carrier (port-plan.md §3
+# Phase 3, Jio first). Use this file only if Floss IMS stalls AND
+# the phone must stay usable for calls in the meantime — and say so
+# in the test report. Do not ship it silently as if VoLTE worked.
+#
+# Apply via the L5 overlay / vendor.prop, only when the fallback is
+# deliberately chosen.
+
+# Stop the IMS retry loops (saves battery, stops crash loops).
+persist.vendor.radio.ims_retry=0
+persist.dbg.volte_avail_ovr=0
+persist.dbg.vt_avail_ovr=0
+persist.dbg.wfc_avail_ovr=0

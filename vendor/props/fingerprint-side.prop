@@ -1,0 +1,26 @@
+# fingerprint-side.prop — side fingerprint mapping (m51 HyperOS port).
+#
+# Pattern from Arnav3078/ColorOS17-SM7150 device.prop + tweaks.prop
+# (GPL-3.0, credited in vendor/README.md): point the donor's
+# in-display biometric stack at the standard
+# android.hardware.biometrics.fingerprint@2.1 HAL, because the m51
+# has a side-mounted capacitive sensor, not an in-display one.
+#
+# For HyperOS the same idea applies to Xiaomi's in-display/optical
+# biometric UI paths: disable the optical UI, keep the HIDL path.
+# The Xiaomi-side optical props are a Phase 3 decision (they depend
+# on which Xiaomi biometric service the spring build ships) — they
+# are NOT copied from OPPO's props here. Only the Samsung-side facts
+# below are asserted.
+#
+# Apply via the L5 overlay / vendor.prop (port-plan.md §1 L5).
+
+# The sensor is side-mounted, capacitive, on the power button.
+persist.vendor.fingerprint.type=side
+persist.sys.fp.side=true
+ro.hardware.fingerprint=m51
+
+# Fingerprint HAL version the vendor actually implements (from the
+# Phase 0 audit): HIDL biometrics fingerprint 2.1, with the Samsung
+# vendor extension vendor.samsung.hardware.biometrics.fingerprint 3.0.
+# Do NOT claim AIDL Biometrics v5 — no such HAL exists for this vendor.
