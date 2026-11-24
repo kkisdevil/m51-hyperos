@@ -28,18 +28,29 @@ Same body as the original (BUG(); + qdf_export_symbol). No
 behaviour change in a debug build; a non-debug build with
 PANIC_ON_BUG now links instead of failing.
 
+CORRECTION 2026-11-24 (run #5 failed on the first version of this
+patch — "patch does not apply" at qdf_trace.c:3991): the first
+version was written against a reconstruction of the file that
+ended at line 3993, but the real file at the pinned commit ends
+with a trailing blank line (line 3994). A hunk whose old side ends
+at the file's last line in the reconstruction does not apply to a
+file with one more line after it. This version was regenerated
+from the real file (raw read at 4d83f24b) and verified with
+`git apply --check` against that exact file before upload.
+
 Applies to kkisdevil/android_kernel_samsung_sm7150 @ 4d83f24b
 (crDroid 4.14.357-openela). Applied porter-side by the
 build-kernel workflow (patches/kernel/*.patch) so the pinned
 kernel ref stays untouched.
 ---
+diff --git a/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c b/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
+index 9651756..20c860e 100644
 --- a/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
 +++ b/drivers/staging/qca-wifi-host-cmn/qdf/linux/src/qdf_trace.c
-@@ -3991,3 +3991,20 @@
- #endif /* CONFIG_SLUB_DEBUG */
+@@ -3992,3 +3992,19 @@ qdf_export_symbol(__qdf_bug);
  #endif /* PANIC_ON_BUG */
  #endif /* WLAN_DEBUG */
-+
+ 
 +/*
 + * __qdf_bug() must be defined whenever QDF_BUG() can emit a call to
 + * it (i_qdf_trace.h takes the extern declaration when PANIC_ON_BUG
