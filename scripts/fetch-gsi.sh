@@ -4,27 +4,49 @@
 #
 # fetch-gsi.sh — download a HyperOS Generic System Image for the m51.
 #
-# Default: HyperOS 2 (Android 15), Mystic GSI, the safest first try on the
-# m51's Android 12 vendor. HyperOS 3 is available with --build.
+# Default: HyperOS 2 (Android 15), Mystic GSI, spring build — the safest
+# first try on the m51's Android 12 vendor. It is the Qualcomm-source
+# HyperOS 2 build (see below); gold was the old default and is kept as
+# an explicit option. HyperOS 3 is available with --build.
 #
-# Known builds (verified against the SourceForge listing on 2026-11-24):
+# Known builds (verified against the SourceForge listing + HTTP HEAD +
+# public firmware pages on 2026-11-24 — see docs/gsi-verification.md):
 #
-#   gold     HyperOS 2 / Android 15, OS3.0.1.0, 2025-12-28, 3.6 GB (default)
-#   spring   HyperOS 2 / Android 15, OS2.0.204.0, 2025-12-06, 3.1 GB
-#   pudding  HyperOS 3 / Android 16, OS3.0.50.2, 2026-01-22, 4.0 GB (experimental)
+#   spring   HyperOS 2 / Android 15, OS2.0.204.0.VOUMIXM, 2025-12-06,
+#            3,122,721,686 bytes, MD5 3e6337d1dd850ae2d0f7d067f8dd191c
+#            Source: Redmi 15 5G / POCO M7 Plus 5G — Qualcomm Snapdragon
+#            6s Gen 3. DEFAULT — the Qualcomm-source HyperOS 2 build the
+#            port plan calls for (no MTK telephony/camera jars).
+#   gold     HyperOS 3.0.1.0 / Android 15, OS3.0.1.0.VNQCNXM, 2025-12-28,
+#            3,554,104,547 bytes, MD5 edb87b9e088f0e1eaa5e8bf1c0ba6113
+#            Source: Redmi Note 13 5G / POCO X6 Neo 5G — MediaTek
+#            Dimensity 6080. NOT HyperOS 2 and NOT Qualcomm, despite the
+#            old label. Use only if the MTK RIL/ATMs shim chain is
+#            deliberately planned in (A03 T1.12-T1.14).
+#   pudding  HyperOS 3 / Android 16, OS3.0.50.2.W, 2026-01-22,
+#            3,994,747,809 bytes, MD5 9eb03ec3f211365aecbaa346be9516b5
+#            Source: Xiaomi 17 — Qualcomm Snapdragon 8 Elite Gen 5
+#            (SM8850). EXPERIMENTAL — biggest vendor gap.
+#
+# Filesystem format of the images (EROFS vs ext4, and EROFS compressor)
+# is UNKNOWN from public metadata — the MysticGSI tool defaults to
+# ext4 and builds EROFS only with --format, but no publisher note says
+# which the published builds use. See docs/gsi-verification.md §3 for
+# the check that settles it after download (it matters: the m51 kernel
+# mounts EROFS-LZ4 only, no LZMA — docs/kernel-defconfig-plan.md §3.3).
 #
 # Note: the Galaxy A71 HyperOS port used a FoxetGSI build, but the
 # FoxetGSI GitHub account returns 404 as of 2026-11-24, so that build is
 # NOT listed here — it cannot be downloaded anymore.
 #
-# Checksums: Mystic GSI publishes NO checksums for these files, so this
-# script cannot compare against a publisher checksum. Instead it verifies
-# (a) the download came from the expected URL, (b) the size is sane
-# against the listed size where one is published, and (c) the archive
-# passes an integrity test (unzip -t / 7z t). It records the SHA-256 of
-# the downloaded file next to it (<file>.sha256) for future reference.
-# Pass --sha256 <hash> to compare against a hash you got from a source
-# you trust.
+# Checksums: SourceForge publishes an MD5 per file (project RSS feed);
+# no SHA-256 is published for these files. This script verifies (a) the
+# download came from the expected URL, (b) the size matches the exact
+# byte count from the mirror HEAD, (c) the MD5 matches the publisher
+# hash, and (d) the archive passes an integrity test (unzip -t / 7z t).
+# It records the SHA-256 of the downloaded file next to it
+# (<file>.sha256) for future reference. Pass --sha256 <hash> to compare
+# against a hash you got from a source you trust.
 #
 # Usage:
 #   scripts/fetch-gsi.sh [--build gold|spring|pudding]
@@ -39,13 +61,14 @@ set -euo pipefail
 
 MYSTIC_BASE="https://sourceforge.net/projects/mystic-gsi-updates/files/HyperOS"
 
-BUILD="gold"
+BUILD="spring"
 OUT_DIR="downloads"
 DRY_RUN=false
 EXTRACT=false
 FILE_OVERRIDE=""
 URL_OVERRIDE=""
 EXPECTED_SHA256=""
+EXPECTED_MD5=""
 LIST_ONLY=false
 
 usage() {
@@ -55,8 +78,10 @@ Usage: fetch-gsi.sh [options]
 Download a HyperOS GSI for the Galaxy M51 (SM-M515F).
 
 Options:
-  --build NAME     gold (default, HyperOS 2), spring (HyperOS 2),
-                   pudding (HyperOS 3, experimental)
+  --build NAME     spring (default, HyperOS 2 / Android 15, Qualcomm
+                   source), gold (HyperOS 3.0.1.0 / Android 15,
+                   MediaTek source — needs the MTK shim chain),
+                   pudding (HyperOS 3 / Android 16, experimental)
   --file NAME      explicit Mystic GSI filename (overrides --build)
   --url URL        explicit direct download URL (overrides --build/--file)
   --out-dir DIR    download directory (default: downloads/)
@@ -71,38 +96,52 @@ EOF
 
 list_builds() {
     cat <<'EOF'
-Known HyperOS GSI builds for the m51 (verified 2026-11-24):
+Known HyperOS GSI builds for the m51 (verified 2026-11-24, see
+docs/gsi-verification.md for sources and the format caveat):
 
-  gold     HyperOS 2 / Android 15 — Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip
-           3.6 GB, 2025-12-28, Mystic GSI. DEFAULT — safest first try.
   spring   HyperOS 2 / Android 15 — Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip
-           3.1 GB, 2025-12-06, Mystic GSI. Alternative HyperOS 2 build.
+           3,122,721,686 bytes, 2025-12-06, MD5 3e6337d1dd850ae2d0f7d067f8dd191c
+           Source: Redmi 15 5G / POCO M7 Plus 5G, Qualcomm Snapdragon 6s Gen 3.
+           DEFAULT — Qualcomm-source HyperOS 2, the safest first try.
+  gold     HyperOS 3.0.1.0 / Android 15 — Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip
+           3,554,104,547 bytes, 2025-12-28, MD5 edb87b9e088f0e1eaa5e8bf1c0ba6113
+           Source: Redmi Note 13 5G / POCO X6 Neo 5G, MediaTek Dimensity 6080.
+           NOT HyperOS 2, NOT Qualcomm — needs the MTK RIL/ATMs shim chain.
   pudding  HyperOS 3 / Android 16 — Hyperos-pudding-16-OS3.0.50.2.W-AB-20260122-MysticGSI.zip
-           4.0 GB, 2026-01-22, Mystic GSI. EXPERIMENTAL — biggest vendor gap.
+           3,994,747,809 bytes, 2026-01-22, MD5 9eb03ec3f211365aecbaa346be9516b5
+           Source: Xiaomi 17, Qualcomm Snapdragon 8 Elite Gen 5 (SM8850).
+           EXPERIMENTAL — biggest vendor gap.
 
 Source: https://sourceforge.net/projects/mystic-gsi-updates/files/HyperOS/
-No publisher checksums exist for these files.
+MD5s are published by SourceForge (project RSS feed); no SHA-256 exists
+for these files. Filesystem format (EROFS vs ext4) is UNKNOWN from
+public metadata — check it right after download (docs/gsi-verification.md §3).
 EOF
 }
 
-# resolve_build <name> — sets FILE, URL, EXPECTED_BYTES (0 = unknown).
+# resolve_build <name> — sets FILE, URL, EXPECTED_BYTES, EXPECTED_MD5.
+# Sizes are exact byte counts (mirror HEAD Content-Length, 2026-11-24);
+# MD5s are the publisher hashes from the SourceForge RSS feed.
 resolve_build() {
     local name="$1"
     case "$name" in
         gold)
             FILE="Hyperos-gold-15-OS3.0.1.0.VNQCNXM-AB-20251228-MysticGSI.zip"
             URL="${MYSTIC_BASE}/${FILE}/download"
-            EXPECTED_BYTES=3600000000
+            EXPECTED_BYTES=3554104547
+            EXPECTED_MD5="edb87b9e088f0e1eaa5e8bf1c0ba6113"
             ;;
         spring)
             FILE="Hyperos-spring-15-OS2.0.204.0.VOUMIXM-AB-20251206-MysticGSI.zip"
             URL="${MYSTIC_BASE}/${FILE}/download"
-            EXPECTED_BYTES=3100000000
+            EXPECTED_BYTES=3122721686
+            EXPECTED_MD5="3e6337d1dd850ae2d0f7d067f8dd191c"
             ;;
         pudding)
             FILE="Hyperos-pudding-16-OS3.0.50.2.W-AB-20260122-MysticGSI.zip"
             URL="${MYSTIC_BASE}/${FILE}/download"
-            EXPECTED_BYTES=4000000000
+            EXPECTED_BYTES=3994747809
+            EXPECTED_MD5="9eb03ec3f211365aecbaa346be9516b5"
             ;;
         *)
             echo "Unknown build: $name (see --list)" >&2
@@ -136,6 +175,7 @@ if [ -n "$URL_OVERRIDE" ]; then
     URL="$URL_OVERRIDE"
     FILE="$(basename "${URL_OVERRIDE%%\?*}")"
     EXPECTED_BYTES=0
+    EXPECTED_MD5=""
 elif [ -n "$FILE_OVERRIDE" ]; then
     FILE="$FILE_OVERRIDE"
     case "$FILE" in
@@ -144,6 +184,7 @@ elif [ -n "$FILE_OVERRIDE" ]; then
     esac
     URL="${MYSTIC_BASE}/${FILE}/download"
     EXPECTED_BYTES=0
+    EXPECTED_MD5=""
 else
     resolve_build "$BUILD"
 fi
@@ -156,11 +197,17 @@ if $DRY_RUN; then
     echo "url:      ${URL}"
     echo "target:   ${TARGET}"
     if [ "$EXPECTED_BYTES" -gt 0 ]; then
-        echo "size:     ~$((EXPECTED_BYTES / 1000000000)).$(( (EXPECTED_BYTES / 100000000) % 10 )) GB (listed size, approximate)"
+        echo "size:     ${EXPECTED_BYTES} bytes (exact, verified 2026-11-24)"
     else
         echo "size:     unknown (not published)"
     fi
-    echo "checksum: none published by the source; see --sha256"
+    if [ -n "$EXPECTED_MD5" ]; then
+        echo "md5:      ${EXPECTED_MD5} (publisher hash, SourceForge RSS)"
+    else
+        echo "md5:      none known for this file; see --sha256"
+    fi
+    echo "format:   EROFS vs ext4 UNKNOWN from public metadata — check after"
+    echo "          download (docs/gsi-verification.md section 3)"
     echo "dry-run:  nothing downloaded."
     exit 0
 fi
@@ -179,17 +226,30 @@ echo "Download finished. Verifying..."
 ACTUAL_BYTES="$(stat -c%s "$TARGET")"
 echo "  size: ${ACTUAL_BYTES} bytes"
 if [ "$EXPECTED_BYTES" -gt 0 ]; then
-    # Listed sizes are rounded to 0.1 GB; allow +/-10%.
+    # EXPECTED_BYTES is the exact byte count (mirror HEAD, 2026-11-24);
+    # allow +/-10% for mirror rounding / re-uploads of the same file.
     LOW=$((EXPECTED_BYTES * 9 / 10))
     HIGH=$((EXPECTED_BYTES * 11 / 10))
     if [ "$ACTUAL_BYTES" -lt "$LOW" ] || [ "$ACTUAL_BYTES" -gt "$HIGH" ]; then
         echo "ERROR: size ${ACTUAL_BYTES} is outside the expected range ${LOW}-${HIGH} for ${FILE} — the download may be incomplete or wrong." >&2
         exit 1
     fi
-    echo "  size OK (within 10% of listed size)"
+    echo "  size OK (within 10% of verified size ${EXPECTED_BYTES})"
 elif [ "$ACTUAL_BYTES" -lt 2000000000 ]; then
     echo "ERROR: ${FILE} is only ${ACTUAL_BYTES} bytes — a real GSI is ~3-5 GB. The download is probably an error page, not the image." >&2
     exit 1
+fi
+
+# Publisher MD5 (SourceForge RSS) — checked before the slow integrity
+# test so a wrong file fails fast.
+if [ -n "$EXPECTED_MD5" ]; then
+    command -v md5sum >/dev/null 2>&1 || { echo "md5sum is required to verify the publisher MD5 (install coreutils)"; exit 1; }
+    ACTUAL_MD5="$(md5sum "$TARGET" | cut -d' ' -f1)"
+    if [ "$ACTUAL_MD5" != "$EXPECTED_MD5" ]; then
+        echo "ERROR: MD5 mismatch — expected ${EXPECTED_MD5}, got ${ACTUAL_MD5}. The download is corrupt or not the published file." >&2
+        exit 1
+    fi
+    echo "  md5 OK (${ACTUAL_MD5}, matches publisher hash)"
 fi
 
 case "$FILE" in
@@ -217,8 +277,9 @@ if [ -n "$EXPECTED_SHA256" ]; then
     fi
     echo "  sha256 matches the expected hash"
 else
-    echo "  NOTE: no publisher checksum exists for this file, so the hash above"
-    echo "  was only recorded, not compared. Re-run with --sha256 <hash> to compare."
+    echo "  NOTE: no publisher SHA-256 exists for this file (the publisher"
+    echo "  hash is MD5, already compared above), so this SHA-256 was only"
+    echo "  recorded, not compared. Re-run with --sha256 <hash> to compare."
 fi
 
 if $EXTRACT; then
