@@ -31,7 +31,8 @@ An experiment, not a daily driver (yet).
 - The recommended first step is a **DSU Sideloader trial boot** — it boots
   the GSI once without replacing the installed system, so a bootloop costs
   nothing. See [docs/dsu-trial.md](docs/dsu-trial.md).
-- The recommended first GSI is **HyperOS 2 (Android 15)**, not HyperOS 3:
+- The recommended first GSI is **HyperOS 2 (Android 15)** — the Mystic
+  `spring` build — not HyperOS 3:
   the m51's vendor is frozen at Android 12 (VNDK 31, kernel 4.14), and the
   smaller the system↔vendor version gap, the fewer HAL surprises. HyperOS 3
   (Android 16) is the second, riskier try.
@@ -73,7 +74,7 @@ is done; no code has been written yet and nothing has been flashed.
   research project, not a port.
 - **Hardest gaps:** RIL/IMS/VoLTE, camera, the side fingerprint sensor,
   SELinux + the HyperOS 3 HIDL→AIDL cliff, and display/lights/brightness.
-- **Plan:** Qualcomm-source HyperOS 2 GSI as the base, forked a71-devs
+- **Plan:** Qualcomm-source HyperOS 2 GSI (`spring`) as the base, forked a71-devs
   trees + crDroid kernel, vendor blobs re-extracted from the latest stock,
   per-device RRO overlay, A03-style smali patches, and HAL bridges
   (VNDKLite config, sensor shim, audio policy, Floss IMS per carrier).
@@ -120,7 +121,7 @@ build script names a config that does not exist — see
    go / no-go for the prerequisites over adb.
 2. **Trial boot (do this first):** follow [docs/dsu-trial.md](docs/dsu-trial.md).
 3. **Full flash:** download the GSI with
-   `bash scripts/fetch-gsi.sh` (HyperOS 2 by default), then follow
+   `bash scripts/fetch-gsi.sh` (HyperOS 2, `spring`, by default), then follow
    [docs/install.md](docs/install.md).
 4. **Report what happened** — boot, SIM/calls, fingerprint, camera — in
    [docs/known-issues.md](docs/known-issues.md) terms, so the next person
@@ -161,7 +162,7 @@ m51-hyperos/
 ├── trees/
 │   └── manifest.json          # machine-readable pins + fork records
 ├── scripts/
-│   ├── fetch-gsi.sh           # download a HyperOS GSI (HyperOS 2 default)
+│   ├── fetch-gsi.sh           # download a HyperOS GSI (HyperOS 2 / spring default)
 │   └── verify-device.sh       # go / no-go prerequisite check over adb
 └── .github/workflows/
     ├── validate.yml           # shellcheck + docs-link checks on push
