@@ -82,6 +82,67 @@ check_absent "good: no SELinux warning" "$GOOD_BUNDLE/SUMMARY.md" 'WARNING: .* S
 check_absent "good: no camera warning" "$GOOD_BUNDLE/SUMMARY.md" 'WARNING: .* camera error'
 check_contains "good: SUMMARY says no warnings" "$GOOD_BUNDLE/SUMMARY.md" 'no warnings detected'
 
-rm -rf "$WORK"
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
-[ "$FAIL" = "0" ]
+
+# ---- watcher (live logcat sessions) ---------------------------------------
+# Uses its own PASS/FAIL tally; the script exits non-zero if either the
+# collector cases or the watcher checks failed.
+WPASS=0; WFAIL=0
+wcheck() { # wcheck <name> <command...>
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+        WPASS=$((WPASS + 1)); printf 'PASS: %s\n' "$name"
+    else
+        WFAIL=$((WFAIL + 1)); printf 'FAIL: %s\n' "$name"
+    fi
+}
+
+WATCH_OUT="$WORK/watch"
+# The collector cases above leave MOCK_FIXTURES pointing at the good
+# fixtures (which lack logcat/dmesg/getprop files) — point it back at
+# the bad fixtures, which have all of them.
+export MOCK_FIXTURES="$TESTS_DIR/fixtures/bad"
+# Run A — reconnect loop: the mock logcat emits ~3 MB then exits, so
+# with --max-mb 5 no rotation happens and each exit starts a new
+# session (one per boot attempt, as on a bootlooping device).
+bash "$LOGGER_DIR/watch-logs.sh" --out "$WATCH_OUT" --duration 20 --max-mb 5 >/dev/null 2>&1
+WATCH_SESSIONS="$(find "$WATCH_OUT" -maxdepth 1 -type d -name 'session-*' | wc -l)"
+wcheck "watch: at least 2 sessions (reconnect loop)" test "$WATCH_SESSIONS" -ge 2
+wcheck "watch: watcher.log exists" test -s "$WATCH_OUT/watcher.log"
+wcheck "watch: watcher.log records a session start" grep -qE 'session 1 started' "$WATCH_OUT/watcher.log"
+wcheck "watch: WATCHER-README exists" test -s "$WATCH_OUT/WATCHER-README.md"
+wcheck "watch: latest symlink exists" test -L "$WATCH_OUT/latest"
+FIRST_SESSION="$(find "$WATCH_OUT" -maxdepth 1 -type d -name 'session-*' | sort | head -n1)"
+wcheck "watch: session has logcat file" test -s "$FIRST_SESSION/logcat-all.txt"
+wcheck "watch: session has dmesg snapshot" test -s "$FIRST_SESSION/dmesg.txt"
+wcheck "watch: session has getprop snapshot" test -s "$FIRST_SESSION/getprop.txt"
+wcheck "watch: session has dsu-state snapshot" test -s "$FIRST_SESSION/dsu-state.txt"
+# Run B — rotation: with --max-mb 1 the same ~3 MB stream must roll
+# to a second part file inside one session.
+WATCH_ROT_OUT="$WORK/watch-rot"
+bash "$LOGGER_DIR/watch-logs.sh" --out "$WATCH_ROT_OUT" --duration 12 --max-mb 1 >/dev/null 2>&1
+ROT_SESSION="$(find "$WATCH_ROT_OUT" -maxdepth 1 -type d -name 'session-*' | sort | head -n1)"
+wcheck "watch-rot: watcher.log records a rotation" grep -qE 'rolled logcat to part 2' "$WATCH_ROT_OUT/watcher.log"
+wcheck "watch-rot: session rolled to part 2" test -s "$ROT_SESSION/logcat-all-part2.txt"
+
+# STOP file stops the watcher.
+WATCH_STOP_OUT="$WORK/watch-stop"
+bash "$LOGGER_DIR/watch-logs.sh" --out "$WATCH_STOP_OUT" --duration 0 >/dev/null 2>&1 &
+WATCH_PID=$!
+sleep 4
+touch "$WATCH_STOP_OUT/STOP"
+STOPPED=0
+for _ in $(seq 1 15); do
+    if ! kill -0 "$WATCH_PID" 2>/dev/null; then STOPPED=1; break; fi
+    sleep 1
+done
+if [ "$STOPPED" = "0" ]; then
+    kill "$WATCH_PID" 2>/dev/null || true
+    wait "$WATCH_PID" 2>/dev/null || true
+fi
+wcheck "watch: exits on STOP file" test "$STOPPED" = "1"
+wcheck "watch-stop: watcher.log records the stop" grep -qE 'watcher stopped' "$WATCH_STOP_OUT/watcher.log"
+
+printf '\nwatcher: %d passed, %d failed\n' "$WPASS" "$WFAIL"
+rm -rf "$WORK"
+[ "$FAIL" = "0" ] && [ "$WFAIL" = "0" ]
