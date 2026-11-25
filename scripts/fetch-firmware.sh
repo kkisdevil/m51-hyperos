@@ -120,9 +120,11 @@ fw_log INFO verify "listing zip contents"
 CONTENTS="$(unzip -l "$ZIP_PATH")"
 echo "$CONTENTS" | while IFS= read -r line; do fw_log INFO verify "zip entry: $line"; done
 for want in BL_M515FXXU6DXJ1 AP_M515FXXU6DXJ1 CP_M515FXXU6DXJ1 HOME_CSC_ODM_M515FODM6DXJ1 CSC_ODM_M515FODM6DXJ1; do
-    echo "$CONTENTS" | grep -q "$want" \
-        && fw_log INFO verify "present: $want" \
-        || fail verify "missing from zip" file="$want"
+    if echo "$CONTENTS" | grep -q "$want"; then
+        fw_log INFO verify "present: $want"
+    else
+        fail verify "missing from zip" file="$want"
+    fi
 done
 
 MD5="$(md5sum "$ZIP_PATH" | awk '{print $1}')"
@@ -130,12 +132,16 @@ SHA256="$(sha256sum "$ZIP_PATH" | awk '{print $1}')"
 fw_log INFO verify "hashes computed" md5="$MD5" sha256="$SHA256"
 # Reference hashes from the verified 2026-11-24 download. If these are
 # ever updated, update docs/FIRMWARE.md in the same commit.
-[ "$MD5" = "d3afc8d09f0bf94faaeccfd29517c9df" ] \
-    && fw_log INFO verify "MD5 matches reference" \
-    || fw_warn verify "MD5 differs from reference" md5="$MD5" reference="d3afc8d09f0bf94faaeccfd29517c9df"
-[ "$SHA256" = "0e71ca19c9d2af6eb8b63e9882218792f855d90326893312bdfa4e1ff5ab50c5" ] \
-    && fw_log INFO verify "SHA-256 matches reference" \
-    || fw_warn verify "SHA-256 differs from reference" sha256="$SHA256" reference="0e71ca19c9d2af6eb8b63e9882218792f855d90326893312bdfa4e1ff5ab50c5"
+if [ "$MD5" = "d3afc8d09f0bf94faaeccfd29517c9df" ]; then
+    fw_log INFO verify "MD5 matches reference"
+else
+    fw_warn verify "MD5 differs from reference" md5="$MD5" reference="d3afc8d09f0bf94faaeccfd29517c9df"
+fi
+if [ "$SHA256" = "0e71ca19c9d2af6eb8b63e9882218792f855d90326893312bdfa4e1ff5ab50c5" ]; then
+    fw_log INFO verify "SHA-256 matches reference"
+else
+    fw_warn verify "SHA-256 differs from reference" sha256="$SHA256" reference="0e71ca19c9d2af6eb8b63e9882218792f855d90326893312bdfa4e1ff5ab50c5"
+fi
 
 EXTRACT_DIR="$FW_DIR/extracted"
 mkdir -p "$EXTRACT_DIR"
@@ -212,7 +218,7 @@ else
             fail drive "part verification FAILED (size/md5 mismatch)" part="$pname" drive_size="$G_SIZE" local_size="$pbytes" drive_md5="$G_MD5" local_md5="$pmd5"
         fi
     done
-    fw_log INFO drive "all parts uploaded and verified" folder="backups/m51-hyperos/firmware" parts="$(ls "$SPLIT_DIR" | wc -l)"
+    fw_log INFO drive "all parts uploaded and verified" folder="backups/m51-hyperos/firmware" parts="$(find "$SPLIT_DIR" -maxdepth 1 -type f | wc -l)"
     fw_log INFO drive "rejoin on download with: cat ${FW_FILE}.part?? > ${FW_FILE} && sha256sum ${FW_FILE} (expect 0e71ca19c9d2af6eb8b63e9882218792f855d90326893312bdfa4e1ff5ab50c5)"
 fi
 
@@ -222,9 +228,11 @@ fi
 if [ "$SKIP_DRIVE" -eq 0 ]; then
     fw_section "5. log upload"
     fw_log INFO drive "uploading this log file to Drive" path="$FW_LOG_FILE"
-    "$GWS_CLI" drive +upload "$FW_LOG_FILE" --parent "$SUB_ID" --name "firmware.log" 2>&1 \
-        && fw_log INFO drive "log uploaded" name="firmware.log" \
-        || fw_warn drive "log upload failed (firmware parts above are unaffected)"
+    if "$GWS_CLI" drive +upload "$FW_LOG_FILE" --parent "$SUB_ID" --name "firmware.log" 2>&1; then
+        fw_log INFO drive "log uploaded" name="firmware.log"
+    else
+        fw_warn drive "log upload failed (firmware parts above are unaffected)"
+    fi
 fi
 
 fw_section "done"
