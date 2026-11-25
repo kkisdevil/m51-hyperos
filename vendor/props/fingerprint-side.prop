@@ -1,17 +1,25 @@
 # fingerprint-side.prop — side fingerprint mapping (m51 HyperOS port).
 #
+# REVISED 2026-11-25 (docs/re-fingerprint.md) — the earlier framing was
+# wrong. The m51 fingerprint service is NOT HIDL 2.1: it is the
+# source-built AIDL android.hardware.biometrics.fingerprint v4 service
+# (LineageOS android_hardware_samsung, aidl/fingerprint/) wrapping
+# libbauthserver.so. HIDL 2.1 is only a stale declaration in the
+# a71-common device manifest; the Android 15 framework never touches
+# HIDL fingerprint. Likewise vendor.samsung.hardware.biometrics.fingerprint
+# 3.0 is a Hyper371 vendor-manifest claim with NO service binary in the
+# frozen blob set — the port does not provide it and HyperOS 2 does not
+# ask for it.
+#
 # Pattern from Arnav3078/ColorOS17-SM7150 device.prop + tweaks.prop
 # (GPL-3.0, credited in vendor/README.md): point the donor's
-# in-display biometric stack at the standard
-# android.hardware.biometrics.fingerprint@2.1 HAL, because the m51
-# has a side-mounted capacitive sensor, not an in-display one.
+# in-display biometric stack at the m51's side-mounted capacitive
+# sensor, not an in-display one.
 #
-# For HyperOS the same idea applies to Xiaomi's in-display/optical
-# biometric UI paths: disable the optical UI, keep the HIDL path.
-# The Xiaomi-side optical props are a Phase 3 decision (they depend
-# on which Xiaomi biometric service the spring build ships) — they
-# are NOT copied from OPPO's props here. Only the Samsung-side facts
-# below are asserted.
+# The Xiaomi-side props below are the Phase 3 RE result (spring GSI,
+# miui-services.jar, disassembled 2026-11-25): without them HyperOS
+# reports "no fingerprint hardware" / never enables the power-button
+# fingerprint path, even with a working HAL.
 #
 # Apply via the L5 overlay / vendor.prop (port-plan.md §1 L5).
 
@@ -20,7 +28,22 @@ persist.vendor.fingerprint.type=side
 persist.sys.fp.side=true
 ro.hardware.fingerprint=m51
 
-# Fingerprint HAL version the vendor actually implements (from the
-# Phase 0 audit): HIDL biometrics fingerprint 2.1, with the Samsung
-# vendor extension vendor.samsung.hardware.biometrics.fingerprint 3.0.
-# Do NOT claim AIDL Biometrics v5 — no such HAL exists for this vendor.
+# Side-mounted sensor declaration for Xiaomi's framework: enables the
+# power-button fingerprint path (PowerFingerprintServiceStubImpl IS_POWERFP).
+# Also read by MiuiPhoneWindowManager / PowerKeyRule — first-boot check:
+# power-key lock/unlock/long-press must be unchanged.
+ro.hardware.fp.sideCap=true
+
+# Fingerprint hardware detection (HyperOS 2, REQUIRED). Xiaomi's
+# FingerprintServiceStubImpl returns isFpHardwareDetected() == false
+# unless this prop is non-empty and not "none". Nothing in the GSI or
+# the m51 vendor sets it. Value = the sensor vendor string from
+# /sys/class/fingerprint/fingerprint/vendor on a booted device
+# (QBT2000 is the leading candidate — see docs/re-fingerprint.md §1.4).
+# Uncomment and fill in once the value is read off the device:
+# persist.vendor.sys.fp.vendor=<vendor string from device>
+
+# Fingerprint HAL version the vendor actually implements (RE 2026-11-25):
+# AIDL android.hardware.biometrics.fingerprint v4 (Samsung service).
+# Do NOT claim AIDL Biometrics v5 — no such HAL exists for this vendor
+# (v5 is a HyperOS 3 research item).
