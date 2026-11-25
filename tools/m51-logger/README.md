@@ -16,6 +16,8 @@ options, privacy, how to read a bundle).
 tools/m51-logger/
   collect-logs.sh          PC over ADB (one persistent connection)
   collect-logs-termux.sh   on-device, inside Termux (local reads only)
+  watch-logs.sh            PC over ADB — LIVE logcat watcher (one session per boot)
+  watch-logs-termux.sh     on-device — LIVE logcat watcher (logcat -f rotation)
   lib/collect-core.sh      shared collectors + SUMMARY.md generator
   tests/                   mock-ADB dry-run (no phone needed)
   README.md                this file
@@ -34,6 +36,27 @@ bash tools/m51-logger/collect-logs-termux.sh
 
 Output: `m51-logs/m51-logs-YYYYMMDD-HHMMSS/` (+ `.tar.gz`),
 or on-device `/sdcard/yuzora-logs/m51-logs-YYYYMMDD-HHMMSS/`.
+
+## Live watcher — the stream, not a snapshot
+
+```bash
+# PC, start BEFORE the DSU boot, stop after:
+bash tools/m51-logger/watch-logs.sh
+# On the phone, in Termux (runtime watching, no PC):
+bash tools/m51-logger/watch-logs-termux.sh start
+bash tools/m51-logger/watch-logs-termux.sh status
+bash tools/m51-logger/watch-logs-termux.sh stop
+```
+
+The PC watcher streams all logcat buffers continuously and saves
+them — one `session-*/` dir per device connection (one per boot
+attempt, so a bootloop never overwrites the previous attempt), plus
+dmesg + getprop + DSU state at every connect; files roll past
+`--max-mb` (default 100). The Termux watcher uses `logcat -f` with
+its own rotation (default 4 MB × 20) plus a dmesg poller when rooted
+— for the running system only; it dies with the system on a GSI
+boot, so the PC watcher is the one for the DSU trial. Full guide:
+`docs/LOGGING-GUIDE.md` ("Live log watcher").
 
 ## Rules the collector follows
 
