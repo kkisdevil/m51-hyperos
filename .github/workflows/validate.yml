@@ -120,9 +120,14 @@ jobs:
           # Verified 2026-11-24: droidwin.com, phonedb.net and
           # thecybersecguru.com all load in a browser but close the
           # connection / 403 for urllib. DNS errors still fail.
+          # 2026-11-25 (Validate #43): the same phonedb.net URL fails
+          # on the runner with SSL CERTIFICATE_VERIFY_FAILED instead
+          # of a closed connection — same host, same class of
+          # automated-check refusal, so SSL errors warn too.
           WARN_ERRORS = ('Remote end closed', 'Empty reply',
                          'Connection reset', 'Connection aborted',
-                         'timed out', 'RemoteDisconnected')
+                         'timed out', 'RemoteDisconnected',
+                         'CERTIFICATE_VERIFY_FAILED', 'SSLError')
 
           failures, warnings = [], []
           checked_external = set()
