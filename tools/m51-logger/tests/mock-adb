@@ -6,8 +6,28 @@
 set -u
 FIX="${MOCK_FIXTURES:-$(dirname "$0")/fixtures/bad}"
 
+# Drop a leading "-s <serial>" if present (watch-logs.sh passes one).
+if [ "${1:-}" = "-s" ]; then shift 2; fi
+
 if [ "${1:-}" = "devices" ]; then
     printf 'List of devices attached\nM515F123456\tdevice\n'
+    exit 0
+fi
+if [ "${1:-}" = "wait-for-device" ]; then
+    exit 0
+fi
+if [ "${1:-}" = "logcat" ]; then
+    # Streaming logcat (watch-logs.sh only): emit ~1 KB per iteration
+    # (~3 MB over ~6s), then exit — the watcher treats the exit as a
+    # device disconnect and starts a new session. printf is a builtin,
+    # so the stream is fast; the sleeps set the session length.
+    content="$(cat "$FIX/logcat.txt")"
+    i=0
+    while [ "$i" -lt 3000 ]; do
+        for _ in 1 2 3 4 5; do printf '%s\n' "$content"; done
+        i=$((i + 1))
+        if [ $((i % 500)) = "0" ]; then sleep 1; fi
+    done
     exit 0
 fi
 if [ "${1:-}" = "connect" ]; then
@@ -37,6 +57,7 @@ if [ "${1:-}" = "shell" ]; then
         *logcat*)             cat "$FIX/logcat.txt" ;;
         *ps\ -A*)             cat "$FIX/ps.txt" ;;
         *dumpsys\ battery*)   cat "$FIX/battery.txt" ;;
+        *dynamic_system*)     printf 'dynamic system state: not installed\n' ;;
         *df\ -h*)             cat "$FIX/df.txt" ;;
         *mount*)              cat "$FIX/mount.txt" ;;
         *media.camera*)       cat "$FIX/camera.txt" ;;
