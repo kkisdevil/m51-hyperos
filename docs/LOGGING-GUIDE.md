@@ -59,6 +59,56 @@ No PC, no network, no ADB connection at all — everything is read
 locally. This is the preferred route when the phone is in hand: it
 binds nothing to the network (see the security note below).
 
+## Live log watcher — continuous capture, nothing lost
+
+The collector above takes a **snapshot**. The watcher records the
+**live stream** — every log line as it happens, saved to files. Start
+it *before* the thing you want to catch (a GSI boot, a lag session),
+stop it after.
+
+### From a PC over ADB (the GSI-boot watcher)
+
+```bash
+# Start BEFORE the DSU boot, stop after:
+bash tools/m51-logger/watch-logs.sh
+# With options:
+bash tools/m51-logger/watch-logs.sh --out ~/m51-gsi-boot --max-mb 100 --keep 10
+# Wireless:
+bash tools/m51-logger/watch-logs.sh --connect 127.0.0.1:5555
+# Stop: Ctrl-C, or `touch <out>/STOP`, or --duration <seconds>
+```
+
+One session dir per device connection — one per boot attempt. A
+bootlooping phone leaves one dir per attempt, so attempt 2 never
+overwrites attempt 1. Each session holds the full live logcat
+(buffers main + system + radio + events + crash, threadtime format)
+plus a dmesg snapshot, getprop and the DSU state taken at connect.
+Files roll to `logcat-all-partN.txt` past `--max-mb` (default 100 MB;
+a roll loses under a second of logs and the gap is written in
+`watcher.log`). `latest` symlinks to the newest session.
+
+If the GSI never reaches adb, the watcher records nothing — a device
+that never talks has no live logs. In that case the pstore snapshot
+from the next `collect-logs.sh` run (or from TWRP) is the only record.
+
+### On the phone, in Termux (runtime watching)
+
+```bash
+bash tools/m51-logger/watch-logs-termux.sh start
+bash tools/m51-logger/watch-logs-termux.sh status
+bash tools/m51-logger/watch-logs-termux.sh stop
+```
+
+`logcat -f` writes straight to `/sdcard/yuzora-logs/live/` with its
+own rotation (`live-logcat.txt`, `.1`, `.2`, … — default 4 MB × 20
+files), plus a dmesg snapshot every 60 s when root is available.
+Use it for logging the *running* system (UN1CA runtime, lag, LMK)
+with no PC attached. It does **not** cover a GSI boot — booting the
+GSI replaces the system Termux runs in, so the on-device watcher dies
+with it. Without root, logcat shows only Termux's own lines; grant
+full read once from a PC:
+`adb shell pm grant com.termux android.permission.READ_LOGS`.
+
 ## Always-on ADB
 
 Collecting logs over ADB works best when the connection is already
